@@ -152,6 +152,10 @@
 
   /* ── Reveal on scroll ───────────────────────────────────────────── */
   .reveal { opacity: 0; transform: translateY(24px); }
+  /* Variante para la Sección 2: entra deslizando desde la izquierda en vez
+     de flotando desde abajo — el texto se "revela" al llegar desde la
+     insignia centrada de la Sección 1, no aparece flotando in-place. */
+  .reveal.reveal-left { transform: translateX(-28px); }
   .reveal-in {
     opacity: 1; transform: none;
     transition: opacity .7s cubic-bezier(.16,1,.3,1), transform .7s cubic-bezier(.16,1,.3,1);
@@ -211,7 +215,7 @@
 <header id="site-header" class="fixed inset-x-0 top-0 z-50 border-b border-transparent transition-colors duration-500">
   <div class="mx-auto flex max-w-[1600px] items-center justify-between gap-4 px-5 py-4 lg:px-8">
 
-    <a href="#hero" class="group flex items-center gap-3" aria-label="CLAPI — inicio">
+    <a href="#hero-intro" class="group flex items-center gap-3" aria-label="CLAPI — inicio">
       <img src="diseño/Isotipo-transparent.png" alt=""
            class="h-9 w-9 shrink-0 transition-transform duration-500 group-hover:rotate-[-8deg]">
       <span class="text-lg font-extrabold tracking-[.24em] text-paper">CLAPI</span>
@@ -264,14 +268,47 @@
 <main id="main" class="relative z-10">
 
 <!-- ══════════════════════════════ HERO ══════════════════════════════ -->
-<section id="hero" class="relative flex min-h-[100svh] flex-col justify-center overflow-hidden pt-28 pb-16 lg:pt-32">
+<!--
+  Sección 1 — intro de marca: h-[100svh] EXACTA (no min-h) a propósito, porque
+  Brand3DCanvas mide esta sección para saber cuándo termina la transición
+  "insignia centrada → posición de reposo": necesita una altura predecible,
+  no una que varíe con el contenido (aquí no hay ninguno).
+-->
+<section id="hero-intro" class="relative flex h-[100svh] flex-col items-center justify-center overflow-hidden">
+  <div aria-hidden="true" class="grid-tech absolute inset-0 -z-10"></div>
+
+  <!-- HUD inferior: lectura en vivo de la orientación del isotipo 3D -->
+  <div class="pointer-events-none absolute inset-x-0 bottom-6 z-20 px-5 lg:px-8">
+    <div class="mx-auto flex max-w-[1600px] items-end justify-between gap-6">
+      <dl id="gizmo" class="hidden font-mono text-[.62rem] tracking-[.14em] text-muted/70 uppercase sm:block">
+        <div class="flex gap-4">
+          <span>Isotipo</span>
+          <span>rx <span data-axis="x" class="text-brand-lite/80">0.00</span></span>
+          <span>ry <span data-axis="y" class="text-brand-lite/80">0.00</span></span>
+          <span>rz <span data-axis="z" class="text-brand-lite/80">0.00</span></span>
+        </div>
+      </dl>
+
+      <a href="#hero-content" class="pointer-events-auto ml-auto flex flex-col items-center gap-2" aria-label="Bajar para descubrir">
+        <span class="font-mono text-[.6rem] tracking-[.22em] text-muted uppercase">Descubre</span>
+        <span class="relative flex h-9 w-5 justify-center overflow-hidden rounded-full border border-line">
+          <span class="cue-bead mt-2 h-1.5 w-1 rounded-full bg-accent"></span>
+        </span>
+      </a>
+    </div>
+  </div>
+</section>
+
+<!-- Sección 2 — propuesta de valor: todo el texto que antes vivía en el hero,
+     ahora se revela al pasar de la insignia centrada a esta sección. -->
+<section id="hero-content" class="relative scroll-mt-24 flex min-h-[100svh] flex-col justify-center overflow-hidden py-20">
   <div aria-hidden="true" class="grid-tech absolute inset-0 -z-10"></div>
 
   <div class="mx-auto w-full max-w-[1600px] px-5 lg:px-8">
     <div class="grid items-center gap-10 lg:grid-cols-12">
 
       <div class="lg:col-span-6 xl:col-span-5">
-        <div class="reveal flex flex-wrap items-center gap-2.5">
+        <div class="reveal reveal-left flex flex-wrap items-center gap-2.5">
           <p class="inline-flex items-center gap-2.5 rounded-full border border-line bg-surface/50 px-4 py-2 font-mono text-[.68rem] tracking-[.18em] text-lav uppercase backdrop-blur-md">
             <span class="live-dot h-1.5 w-1.5 rounded-full bg-accent"></span>
             Automatización con IA
@@ -285,20 +322,20 @@
           </a>
         </div>
 
-        <h1 class="reveal mt-7 text-[clamp(2.4rem,6.2vw,4.4rem)] leading-[1.04] font-extrabold tracking-[-.03em] text-paper">
+        <h1 class="reveal reveal-left mt-7 text-[clamp(2.4rem,6.2vw,4.4rem)] leading-[1.04] font-extrabold tracking-[-.03em] text-paper">
           Software a la medida
           <span class="text-brand-lite">+ IA</span>
           que automatiza
           <span class="bg-linear-to-r from-accent via-lav to-brand-lite bg-clip-text text-transparent">lo que frena tu crecimiento.</span>
         </h1>
 
-        <p class="reveal mt-7 max-w-lg text-base leading-relaxed text-muted sm:text-lg">
+        <p class="reveal reveal-left mt-7 max-w-lg text-base leading-relaxed text-muted sm:text-lg">
           Analizamos, diseñamos y construimos sistemas inteligentes que optimizan operaciones
           empresariales complejas. Menos tareas repetitivas, menos costos y control total
           en tiempo real.
         </p>
 
-        <div class="reveal mt-9 flex flex-col gap-3 sm:flex-row sm:items-center">
+        <div class="reveal reveal-left mt-9 flex flex-col gap-3 sm:flex-row sm:items-center">
           <a href="#contacto"
              class="group inline-flex cursor-pointer items-center justify-center gap-2 rounded-xl bg-accent px-7 py-4 text-base font-bold text-ink transition-all duration-300 hover:shadow-[0_0_36px_-6px_rgba(255,213,0,.7)] hover:brightness-105">
             Iniciar Proyecto
@@ -310,7 +347,7 @@
           </a>
         </div>
 
-        <dl class="reveal mt-12 grid max-w-lg grid-cols-3 gap-5 border-t border-line-soft pt-8">
+        <dl class="reveal reveal-left mt-12 grid max-w-lg grid-cols-3 gap-5 border-t border-line-soft pt-8">
           <div>
             <dt class="font-mono text-[.62rem] tracking-[.14em] text-muted uppercase">Tiempo ahorrado</dt>
             <dd class="mt-2 text-2xl font-bold text-brand-lite sm:text-3xl">+68%</dd>
@@ -326,31 +363,9 @@
         </dl>
       </div>
 
-      <!-- Espaciador: el isotipo 3D ahora se centra en toda la pantalla (capa
-           fija, independiente del grid), así que esto solo reserva la altura
-           que el objeto necesita por encima del texto en móvil. -->
-      <div class="pointer-events-none order-first h-[38svh] lg:order-none lg:col-span-6 lg:col-start-7 lg:h-[70svh]" aria-hidden="true"></div>
-    </div>
-  </div>
-
-  <!-- HUD inferior: lectura en vivo de la orientación del isotipo 3D -->
-  <div class="pointer-events-none absolute inset-x-0 bottom-6 z-20 px-5 lg:px-8">
-    <div class="mx-auto flex max-w-[1600px] items-end justify-between gap-6">
-      <dl id="gizmo" class="hidden font-mono text-[.62rem] tracking-[.14em] text-muted/70 uppercase sm:block">
-        <div class="flex gap-4">
-          <span>Isotipo</span>
-          <span>rx <span data-axis="x" class="text-brand-lite/80">0.00</span></span>
-          <span>ry <span data-axis="y" class="text-brand-lite/80">0.00</span></span>
-          <span>rz <span data-axis="z" class="text-brand-lite/80">0.00</span></span>
-        </div>
-      </dl>
-
-      <a href="#servicios" class="pointer-events-auto ml-auto flex flex-col items-center gap-2" aria-label="Ir a servicios">
-        <span class="font-mono text-[.6rem] tracking-[.22em] text-muted uppercase">Scroll</span>
-        <span class="relative flex h-9 w-5 justify-center overflow-hidden rounded-full border border-line">
-          <span class="cue-bead mt-2 h-1.5 w-1 rounded-full bg-accent"></span>
-        </span>
-      </a>
+      <!-- Columna derecha vacía a propósito: aquí es donde el isotipo 3D
+           (capa fija, independiente del grid) queda asentado en escritorio. -->
+      <div class="hidden lg:block lg:col-span-6 lg:col-start-7" aria-hidden="true"></div>
     </div>
   </div>
 </section>
@@ -907,7 +922,7 @@
     <div class="grid gap-10 sm:grid-cols-2 lg:grid-cols-4">
 
       <div class="sm:col-span-2">
-        <a href="#hero" class="flex items-center gap-3" aria-label="CLAPI — inicio">
+        <a href="#hero-intro" class="flex items-center gap-3" aria-label="CLAPI — inicio">
           <img src="diseño/Isotipo-transparent.png" alt="" class="h-8 w-8">
           <span class="text-lg font-extrabold tracking-[.24em] text-paper">CLAPI</span>
         </a>
@@ -1275,7 +1290,7 @@ function HologramMark() {
   const rimVioletRef = useRef();
   const rimGoldRef = useRef();
 
-  const input = useRef({ tx: 0, ty: 0, x: 0, y: 0, heroProgress: 0 });
+  const input = useRef({ tx: 0, ty: 0, x: 0, y: 0, heroProgress: 0, introProgress: 0 });
   const spinRef = useRef(0);
   const scratchEuler = useRef(new THREE.Euler());
   const targetQuat = useRef(new THREE.Quaternion());
@@ -1381,9 +1396,20 @@ function HologramMark() {
       input.current.ty = -((e.clientY / window.innerHeight) * 2 - 1);
     }
     function onScroll() {
-      const heroEl = document.getElementById('hero');
-      const h = (heroEl && heroEl.offsetHeight) || window.innerHeight;
-      input.current.heroProgress = Math.min(Math.max(window.scrollY / h, 0), 1);
+      /*
+        Dos progresos, uno por cada sección — antes había una sola sección
+        #hero y un solo progreso. introProgress cubre SOLO la Sección 1 (la
+        insignia): llega a 1 justo al entrar a Sección 2, que es el momento
+        en que la transición centro→reposo debe estar terminada. heroProgress
+        sigue cubriendo el tramo completo (Sección 1 + Sección 2) y es lo que
+        maneja el desvanecido del canvas al salir del hero hacia Servicios.
+      */
+      const introEl = document.getElementById('hero-intro');
+      const contentEl = document.getElementById('hero-content');
+      const introH = (introEl && introEl.offsetHeight) || window.innerHeight;
+      const contentH = (contentEl && contentEl.offsetHeight) || window.innerHeight;
+      input.current.introProgress = Math.min(Math.max(window.scrollY / introH, 0), 1);
+      input.current.heroProgress = Math.min(Math.max(window.scrollY / (introH + contentH), 0), 1);
     }
     onScroll();
     if (!reduced) window.addEventListener('pointermove', onMove, { passive: true });
@@ -1402,7 +1428,10 @@ function HologramMark() {
     if (!reduced) spinRef.current += dt * 0.24;
     const spin = spinRef.current;
 
-    const scrollSpin = reduced ? 0 : input.current.heroProgress * Math.PI * 2.4;
+    /* Atado a introProgress (Sección 1), no al heroProgress completo: el giro
+       grande es el motor visual de la transición insignia→hero, no algo que
+       deba seguir acumulando mientras el usuario lee la Sección 2. */
+    const scrollSpin = reduced ? 0 : input.current.introProgress * Math.PI * 2.4;
 
     const t = damp(0.0025, dt);
     input.current.x += (input.current.tx - input.current.x) * t;
@@ -1421,21 +1450,25 @@ function HologramMark() {
     const fit = softFit(visibleW);
 
     /*
-      ── Intro insignia → posición fija en el hero ─────────────────────────
+      ── Intro insignia (Sección 1) → posición fija en el hero (Sección 2) ──
 
-      introT recorre 0→1 en el primer 35% del scroll del hero (smootherstep,
-      no lineal, para que el acomodo frene en vez de detenerse en seco). En
-      introT=0 (tope de página) el objeto vive en el centro absoluto (x=0,
-      y=0) a su escala más grande — la "insignia de presentación" pedida. A
-      medida que crece, interpola hacia la posición y escala de reposo que
-      ya tenía la escena (derecha en escritorio, arriba centrado en móvil).
+      introT recorre 0→1 exactamente a lo largo de la Sección 1 — llega a 1
+      justo cuando el usuario termina de pasar a la Sección 2, no a un
+      porcentaje arbitrario del hero completo (así era antes de dividir el
+      hero en dos secciones). smootherstep, no lineal, para que el acomodo
+      frene en vez de detenerse en seco. En introT=0 (tope de página) el
+      objeto vive en el centro absoluto (x=0, y=0) a su escala más grande —
+      la "insignia de presentación" pedida. A medida que crece, interpola
+      hacia la posición y escala de reposo (derecha en escritorio, arriba
+      centrado en móvil) — el sitio donde la Sección 2 le dejó una columna
+      libre.
 
       reduced-motion salta directo a introT=1: la composición de reposo es
       la que no depende de que el usuario haga scroll para verse bien, así
       que es la que se le muestra siempre a quien pidió sin animaciones.
     */
     const wide = visibleW / visibleH > 1.05;
-    const introT = reduced ? 1 : smootherstep(Math.min(input.current.heroProgress / 0.35, 1));
+    const introT = reduced ? 1 : smootherstep(input.current.introProgress);
     const restX = wide ? visibleW * 0.22 : 0;
     const restY = wide ? 0.05 : visibleH * 0.16;
 
@@ -1557,11 +1590,12 @@ function hasWebGL() {
 /*
   ── Brand3DCanvas ────────────────────────────────────────────────────────
 
-  El "HeroSection.tsx" de la petición ya existe en este archivo: es el <section
-  id="hero"> de HTML plano de más arriba (titular, botones, badges, cue de
-  scroll) — no se reescribió como componente React porque nada de esto pide
-  que lo sea, y hacerlo duplicaría markup que ya funciona. Este componente es
-  el equivalente de "Brand3DCanvas.tsx": el Canvas y toda la lógica acoplada
+  El "HeroSection.tsx" de la petición ya existe en este archivo: son las
+  secciones <section id="hero-intro"> (insignia centrada, sin texto) y
+  <section id="hero-content"> (titular, botones, badges, métricas) de HTML
+  plano de más arriba — no se reescribieron como componente React porque nada
+  de esto pide que lo sean, y hacerlo duplicaría markup que ya funciona. Este
+  componente es el equivalente de "Brand3DCanvas.tsx": el Canvas y toda la lógica acoplada
   al scroll viven aquí, montados sobre #scene (position:fixed, pointer-events:
   none, ya lo tenía la página) — eso YA es el "sticky canvas transparente que
   no bloquea clics" pedido, sin nada nuevo que añadir ahí.
