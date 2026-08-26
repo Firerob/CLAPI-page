@@ -20,15 +20,42 @@
 
 <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
 
-<!-- three.js — el isotipo 3D del hero vive aquí -->
+<!--
+  El isotipo 3D del hero vive aquí, en React + React Three Fiber + Drei.
+
+  Sin paso de build (este sitio es un único HTML), así que React se carga por
+  CDN vía import maps y el JSX se transpila EN EL NAVEGADOR con Babel
+  Standalone (script más abajo, justo antes del cierre de </body>) — de ahí
+  el aviso de Babel en consola sobre precompilar para producción: es preciso,
+  pero es la única forma de tener JSX real sin bundler.
+
+  three se fija en 0.160.0, no en la versión más nueva que usa logo3D.html:
+  es la que confirmé compatible con @react-three/fiber@8 / drei@9 antes de
+  escribir nada más (ver más abajo por qué el `deps=`/`external=` en cada URL
+  de esm.sh no es decorativo).
+-->
 <script type="importmap">
 {
   "imports": {
-    "three": "https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js",
-    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/"
+    "react": "https://esm.sh/react@18",
+    "react/jsx-runtime": "https://esm.sh/react@18/jsx-runtime",
+    "react-dom/client": "https://esm.sh/react-dom@18/client",
+    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+    "@react-three/fiber": "https://esm.sh/@react-three/fiber@8?deps=react@18,react-dom@18,three@0.160.0&external=react,react-dom,three",
+    "@react-three/drei": "https://esm.sh/@react-three/drei@9?deps=react@18,react-dom@18,three@0.160.0,@react-three/fiber@8&external=react,react-dom,three,@react-three/fiber"
   }
 }
 </script>
+<!--
+  esm.sh empaqueta cada paquete con SU PROPIA copia de sus dependencias por
+  defecto. Sin `deps=`/`external=`, @react-three/fiber traería su propio React
+  y su propio three, DISTINTOS de los que importamos arriba — dos copias de
+  React rompen los hooks (invalid hook call), y dos copias de three hacen que
+  sus `instanceof` internos fallen entre sí. Verificado con una prueba mínima
+  (una caja girando) antes de escribir el componente real: sin estos
+  parámetros, la página quedaba en blanco con "Invalid hook call" en consola.
+-->
+<script src="https://unpkg.com/@babel/standalone@7/babel.min.js"></script>
 
 <style type="text/tailwindcss">
   /* ────────────────────────────────────────────────────────────────
@@ -1137,378 +1164,392 @@
 })();
 </script>
 
-<!-- ══════════════════════════════ ESCENA 3D ══════════════════════════════ -->
-<script type="module">
+<!-- ══════════════════════════════ ESCENA 3D (React Three Fiber) ══════════════════════════════ -->
+<script type="text/babel" data-type="module" data-presets="react">
+import React, { useRef, useMemo, useEffect } from 'react';
+import { createRoot } from 'react-dom/client';
 import * as THREE from 'three';
-import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+import { Canvas, useFrame } from '@react-three/fiber';
 
 /*
-  ── El isotipo CLAPI en 3D ───────────────────────────────────────────────────
+  ── El isotipo CLAPI en 3D — acabado holograma (React Three Fiber) ──────────
 
-  Una sola representación del logo: el isotipo real, extruido a partir de su
-  silueta vectorial (mismo pipeline que logo3D.html — se duplica LOGO_PATHS
-  aquí porque este sitio es HTML plano sin build, sin módulo compartido entre
-  páginas). Material satinado opaco, no cristal: la versión con
-  `transmission` obligaba a poner un plano OPACO detrás de la marca para que
-  el vidrio tuviera algo que refractar (si no, se ve gris) — ese plano tenía
-  un tamaño fijo en unidades de mundo que no escalaba con el aspecto de la
-  pantalla, así que en viewports más angostos o más anchos que el de diseño
-  se veía su borde recto: el "cuadrado morado con bordes duros" reportado.
-  Sin transmisión, ese plano deja de ser necesario y el canvas vuelve a ser
-  transparente de verdad en todas partes.
+  Misma silueta vectorial que las versiones anteriores (LOGO_PATHS no cambia
+  un solo número: extrusión y bisel tampoco). Lo que cambia es el TRATAMIENTO:
+  material semitransparente con emisión propia, wireframe superpuesto, bordes
+  en línea neón, partículas de datos internas y anillos HUD punteados.
+
+  React + R3F por CDN, sin build: React/ReactDOM/three/@react-three/fiber
+  llegan por import map (arriba en <head>) y este bloque se transpila de JSX
+  a JS en el navegador con Babel Standalone — de ahí `type="text/babel"` en
+  vez de `type="module"`. El resto de la página (scroll, menú, formulario)
+  sigue en JS plano; solo este componente vive en React.
 */
 
-const host = document.getElementById('scene');
 const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 const isMobile = window.matchMedia('(max-width: 767px)').matches;
 
 const LOGO_PATHS = {"yellow":[{"outer":[[-0.0559,0.4941],[-0.0206,0.4941],[0.0147,0.4824],[0.3529,0.2647],[0.3824,0.2382],[0.3971,0.2029],[0.3971,0.0353],[0.3735,0.0029],[0.2853,-0.0059],[0.1353,-0.0029],[0.1265,0.0059],[0.1176,0.05],[0.0941,0.0706],[-0.3235,0.3206],[-0.3206,0.3294],[-0.1,0.4765]],"holes":[]},{"outer":[[0.1676,-0.1441],[0.3882,-0.1441],[0.3971,-0.1529],[0.3941,-0.2147],[0.3765,-0.25],[0.3559,-0.2706],[0.2118,-0.3647],[0.1824,-0.3676],[0.0265,-0.2588],[0.1294,-0.1912]],"holes":[]}],"violetLight":[{"outer":[[-0.3765,0.25],[-0.1676,0.1176],[-0.1412,0.0912],[-0.1324,0.0706],[-0.1324,-0.1853],[-0.1235,-0.2088],[-0.1029,-0.2294],[0.1441,-0.3971],[0.1471,-0.4088],[0.0206,-0.4882],[-0.0353,-0.4912],[-0.0676,-0.4765],[-0.3735,-0.2706],[-0.3971,-0.2324],[-0.4059,-0.1941],[-0.4059,0.2029],[-0.3971,0.2294]],"holes":[]}],"violetDark":[{"outer":[[-0.2971,0.2971],[-0.05,0.15],[-0.1147,0.1088],[-0.1294,0.0941],[-0.1324,0.0735],[-0.1382,0.0912],[-0.1676,0.1206],[-0.3735,0.2471]],"holes":[]}]};
 
-/* Ancho visible en z=0 sobre el 16:9 contra el que se compuso la escena.
-   fov 38 a distancia 6 → altura visible 4.13; 4.13 × 16/9 = 7.35. */
 const DESIGN_VIEWPORT_WIDTH = 7.35;
-
-/* Encaje suavizado (exponente 0.75, no lineal): en un teléfono la marca puede
-   ocupar más del ancho porque no compite con nada a los lados. Lineal la
-   dejaría al 32% en todas partes, que es aritmética correcta y mala
-   composición. */
 const softFit = (w) => Math.min(1, Math.pow(Math.max(w, 0.001) / DESIGN_VIEWPORT_WIDTH, 0.75));
-
-/* Amortiguación independiente del framerate. lerp(a,b,0.1) converge el doble
-   de rápido a 120Hz que a 60Hz: la escena se sentiría distinta según el
-   monitor. */
 const damp = (lambda, dt) => 1 - Math.pow(lambda, dt);
 const smootherstep = (x) => { const t = Math.min(Math.max(x, 0), 1); return t * t * t * (t * (t * 6 - 15) + 10); };
 
-let renderer;
-try {
-  /*
-    alpha:true — ya no hace falta un fondo opaco dentro de la escena.
-    Sin vidrio con transmisión que muestrear, el canvas puede ser transparente
-    de verdad y dejar ver el degradado radial + rejilla técnica que ya vive en
-    el CSS de la página, en vez de duplicar ese fondo dentro de three.js.
-  */
-  renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: 'high-performance' });
-} catch (err) {
-  console.warn('[CLAPI] WebGL no disponible, se mantiene el fondo CSS.', err);
+const MARK_SCALE = 2.5;
+const DEPTH = 0.15;
+const EXTRUDE_SETTINGS = { depth: DEPTH, bevelEnabled: true, bevelThickness: 0.022, bevelSize: 0.02, bevelSegments: 6, curveSegments: 1 };
+
+/* Paleta neón pedida para el acabado holograma — distinta a propósito de los
+   tokens de marca (#532CE1/#FFD500) que usa el resto del sitio: aquí se pide
+   un violeta y un dorado más eléctricos, así que se honran los hex exactos
+   en vez de sustituirlos por los tokens existentes. */
+const NEON_VIOLET = '#A855F7';
+const NEON_VIOLET_DARK = '#7C3AED';
+const NEON_GOLD = '#FACC15';
+
+function shapesFrom(entries) {
+  return entries.map(({ outer, holes }) => {
+    const shape = new THREE.Shape(outer.map(([x, y]) => new THREE.Vector2(x, y)));
+    holes.forEach((h) => shape.holes.push(new THREE.Path(h.map(([x, y]) => new THREE.Vector2(x, y)))));
+    return shape;
+  });
 }
 
-if (renderer) {
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, isMobile ? 1.5 : 2));
-  renderer.setSize(window.innerWidth, window.innerHeight);
-  renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1.0;
-  host.appendChild(renderer.domElement);
-
-  const scene = new THREE.Scene();
-  // sin scene.background: el canvas es transparente, ver nota de alpha arriba.
-
-  const camera = new THREE.PerspectiveCamera(38, window.innerWidth / window.innerHeight, 0.1, 100);
-  camera.position.set(0, 0, 6);
-
-  /* Entorno neutro y tenue: le da a la laca satinada un reflejo de estudio
-     limpio en los bordes sin teñirla — el color lo llevan los materiales,
-     no el entorno. */
-  const pmrem = new THREE.PMREMGenerator(renderer);
-  scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
-  scene.environmentIntensity = 0.35;
-
-  /* ── Geometría: extrusión de la silueta real del isotipo ─────────────── */
-  function shapeFromPolygon(outer, holes) {
-    const shape = new THREE.Shape(outer.map(([x, y]) => new THREE.Vector2(x, y)));
-    for (const h of holes) shape.holes.push(new THREE.Path(h.map(([x, y]) => new THREE.Vector2(x, y))));
-    return shape;
+/* Aro HUD: línea punteada cerrada, no un tubo sólido — LineDashedMaterial
+   necesita computeLineDistances() en el objeto (no en la geometría), así que
+   se construye como THREE.Line ya terminado y se monta con <primitive>. */
+function buildHudRing(radius, color, dashSize, gapSize) {
+  const pts = [];
+  const N = 128;
+  for (let i = 0; i <= N; i++) {
+    const a = (i / N) * Math.PI * 2;
+    pts.push(new THREE.Vector3(Math.cos(a) * radius, Math.sin(a) * radius * 0.82, 0));
   }
+  const geo = new THREE.BufferGeometry().setFromPoints(pts);
+  const mat = new THREE.LineDashedMaterial({ color, transparent: true, opacity: 0.55, dashSize, gapSize, toneMapped: false });
+  const line = new THREE.Line(geo, mat);
+  line.computeLineDistances();
+  return line;
+}
 
-  const MARK_SCALE = 2.5;
-  /* Delgada a propósito: 0.15 de profundidad da un bisel visible sin que el
-     objeto deje de leerse como un isotipo (chapa con relieve), no como un
-     bloque. Bisel suave (bevelSegments 6) para que el borde se vea pulido en
-     vez de facetado, sin la exageración de una versión anterior. */
-  const DEPTH = 0.15;
-  const extrudeSettings = { depth: DEPTH, bevelEnabled: true, bevelThickness: 0.022, bevelSize: 0.02, bevelSegments: 6, curveSegments: 1 };
-
-  /* Sin geo.center(): las piezas deben conservar su posición relativa (la
-     cinta amarilla cae exactamente sobre el hueco de la "C"); centrar cada
-     una por separado las desalinearía entre sí. */
-  function buildGroup(entries, material, zOffset) {
-    const group = new THREE.Group();
-    for (const { outer, holes } of entries) {
-      const mesh = new THREE.Mesh(new THREE.ExtrudeGeometry(shapeFromPolygon(outer, holes), extrudeSettings), material);
-      mesh.position.z = zOffset;
-      group.add(mesh);
+function DataDust({ count, parentHalfExtents }) {
+  const geo = useMemo(() => {
+    const g = new THREE.BufferGeometry();
+    const pos = new Float32Array(count * 3);
+    const col = new Float32Array(count * 3);
+    const violet = new THREE.Color(NEON_VIOLET);
+    const gold = new THREE.Color(NEON_GOLD);
+    for (let i = 0; i < count; i++) {
+      pos[i * 3 + 0] = (Math.random() - 0.5) * parentHalfExtents[0] * 2;
+      pos[i * 3 + 1] = (Math.random() - 0.5) * parentHalfExtents[1] * 2;
+      pos[i * 3 + 2] = (Math.random() - 0.5) * parentHalfExtents[2] * 2;
+      const c = Math.random() < 0.5 ? violet : gold;
+      col[i * 3 + 0] = c.r; col[i * 3 + 1] = c.g; col[i * 3 + 2] = c.b;
     }
-    return group;
-  }
+    g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    g.setAttribute('color', new THREE.BufferAttribute(col, 3));
+    return g;
+  }, [count, parentHalfExtents]);
 
-  /* Laca satinada: roughness/metalness bajos para un reflejo limpio en los
-     bordes sin leerse como metal ni como plástico apagado. Sin transmission
-     ni emissive — ver la nota de arriba sobre por qué el cristal se abandonó. */
-  const matVioletLight = new THREE.MeshPhysicalMaterial({ color: '#5B34E8', roughness: 0.2, metalness: 0.1, clearcoat: 0.4, clearcoatRoughness: 0.2 });
-  const matVioletDark  = new THREE.MeshPhysicalMaterial({ color: '#2E1580', roughness: 0.22, metalness: 0.1, clearcoat: 0.35, clearcoatRoughness: 0.22 });
-  const matYellow      = new THREE.MeshPhysicalMaterial({ color: '#FFD500', roughness: 0.18, metalness: 0.08, clearcoat: 0.4, clearcoatRoughness: 0.18 });
+  const ref = useRef();
+  useFrame((state, dt) => {
+    if (!reduced && ref.current) ref.current.rotation.y -= Math.min(dt, 1 / 30) * 0.3;
+  });
 
-  const mark = new THREE.Group();
-  const ring = buildGroup(LOGO_PATHS.violetLight, matVioletLight, 0);
-  const ringDark = buildGroup(LOGO_PATHS.violetDark, matVioletDark, 0);
-  /* La cinta amarilla se adelanta ligeramente: en el isotipo plano se dibuja
-     POR ENCIMA del violeta en el pliegue — ese desfase en Z traduce esa
-     superposición 2D a profundidad real en vez de dejarlas coplanares. */
-  const ribbon = buildGroup(LOGO_PATHS.yellow, matYellow, DEPTH * 0.4);
-  mark.add(ring, ringDark, ribbon);
-  mark.position.z = -DEPTH * 0.6; // centra la extrusión en Z para que gire sobre su propio centro
-  scene.add(mark);
+  return (
+    <points ref={ref} geometry={geo}>
+      <pointsMaterial size={isMobile ? 0.016 : 0.02} vertexColors transparent opacity={0.9}
+        sizeAttenuation depthWrite={false} blending={THREE.AdditiveBlending} toneMapped={false} />
+    </points>
+  );
+}
 
-  /*
-    Resplandor detrás de la marca: un sprite ADITIVO con un degradado radial
-    generado en canvas (sin pedir otra imagen). Transparente de verdad, no un
-    plano opaco: un sprite con blending aditivo se desvanece a la nada en su
-    propio borde sin importar la resolución ni el aspecto de la pantalla, así
-    que no puede producir el "cuadrado con bordes duros" que sí producía el
-    plano opaco que el cristal necesitaba.
-  */
-  const glowCanvas = document.createElement('canvas');
-  glowCanvas.width = glowCanvas.height = 256;
-  const gctx = glowCanvas.getContext('2d');
-  const glowGrad = gctx.createRadialGradient(128, 128, 0, 128, 128, 128);
-  glowGrad.addColorStop(0, 'rgba(155,124,255,0.5)');
-  glowGrad.addColorStop(0.5, 'rgba(255,213,0,0.16)');
-  glowGrad.addColorStop(1, 'rgba(255,213,0,0)');
-  gctx.fillStyle = glowGrad;
-  gctx.fillRect(0, 0, 256, 256);
-  const glow = new THREE.Sprite(new THREE.SpriteMaterial({
-    map: new THREE.CanvasTexture(glowCanvas), transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
-  }));
-  glow.scale.setScalar(4.6);
-  glow.position.z = -1.4;
-  scene.add(glow);
+function HologramMark() {
+  const markRef = useRef();
+  const glowRef = useRef();
+  const ambientPointsRef = useRef();
+  const ringVioletRef = useRef();
+  const ringGoldRef = useRef();
+  const keyRef = useRef();
+  const rimVioletRef = useRef();
+  const rimGoldRef = useRef();
 
-  /* ── Partículas: motas de marca a la deriva, muy tenues ────────────────── */
-  const PARTICLE_COUNT = isMobile ? 70 : 140;
-  const particlePositions = new Float32Array(PARTICLE_COUNT * 3);
-  for (let i = 0; i < PARTICLE_COUNT; i++) {
-    particlePositions[i * 3 + 0] = (Math.random() - 0.5) * 9;
-    particlePositions[i * 3 + 1] = (Math.random() - 0.5) * 5.5;
-    particlePositions[i * 3 + 2] = (Math.random() - 0.5) * 5 - 1;
-  }
-  const particleGeo = new THREE.BufferGeometry();
-  particleGeo.setAttribute('position', new THREE.BufferAttribute(particlePositions, 3));
-  const particles = new THREE.Points(particleGeo, new THREE.PointsMaterial({
-    color: '#C9BFFF', size: 0.028, transparent: true, opacity: 0.4, sizeAttenuation: true, depthWrite: false,
-  }));
-  scene.add(particles);
+  const input = useRef({ tx: 0, ty: 0, x: 0, y: 0, heroProgress: 0 });
+  const spinRef = useRef(0);
+  const scratchEuler = useRef(new THREE.Euler());
+  const targetQuat = useRef(new THREE.Quaternion());
+  const gizmoTick = useRef(0);
+  const revealed = useRef(false);
 
-  /*
-    ── Estelas energéticas: venas de luz orbitando el isotipo ───────────────
-
-    Dos aros de tubo (CatmullRomCurve3 cerrada + TubeGeometry), cada uno en un
-    plano distinto y a un radio distinto, para que no se lean como un anillo
-    plano único. Colores de marca: violeta claro y dorado, los mismos tokens
-    que ya usa el resto del sitio (--color-brand-lite / --color-accent) en vez
-    de introducir hex nuevos.
-
-    Additive + `transparent:true`: aquí es seguro, a diferencia del intento
-    con vidrio de una versión anterior — sin material de transmisión en la
-    escena, no hay una cola de "objetos opacos" de la que sacar estas líneas,
-    así que no hay riesgo de reproducir el bug del cuadrado con bordes duros.
-    Additive además es lo que las hace leerse como luz y no como un cable: se
-    suman al fondo en vez de taparlo, y se desvanecen solas en los extremos
-    finos del tubo sin necesitar una textura con alpha.
-  */
-  function energyRing(radius, tiltX, tiltZ, color, tubeRadius) {
-    const points = [];
-    const N = 10;
-    for (let i = 0; i < N; i++) {
-      const a = (i / N) * Math.PI * 2;
-      points.push(new THREE.Vector3(Math.cos(a) * radius, Math.sin(a) * radius * 0.82, 0));
-    }
-    const curve = new THREE.CatmullRomCurve3(points, true, 'catmullrom', 0.5);
-    const geo = new THREE.TubeGeometry(curve, 90, tubeRadius, 8, true);
-    const mesh = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({
-      color, transparent: true, opacity: 0.45, blending: THREE.AdditiveBlending, toneMapped: false, depthWrite: false,
-    }));
-    mesh.rotation.x = tiltX;
-    mesh.rotation.z = tiltZ;
-    return mesh;
-  }
-
-  const energyGroup = new THREE.Group();
-  const ringViolet = energyRing(2.75, 0.35, 0.12, '#9B7CFF', isMobile ? 0.026 : 0.034);
-  const ringGold = energyRing(2.3, -0.28, -0.22, '#FFD500', isMobile ? 0.02 : 0.027);
-  energyGroup.add(ringViolet, ringGold);
-  scene.add(energyGroup);
-
-  /*
-    ── Iluminación: simple y plana, sin sombras proyectadas ────────────────
-
-    Sin `castShadow`/`receiveShadow` ni mapa de sombras: un ShadowMaterial mal
-    encajado con la escala del objeto es exactamente lo que producía los
-    "bloques negros feos" reportados. Ambiental alta + una direccional suave
-    iluminan el volumen de forma pareja; dos acentos de color a intensidad
-    baja (no puntos de luz "quemados") le dan el toque de marca en los bordes
-    sin crear contraste duro.
-  */
-  const ambient = new THREE.AmbientLight(0xffffff, 0.8);
-  scene.add(ambient);
-
-  const key = new THREE.DirectionalLight(0xffffff, 1.2);
-  key.position.set(2.4, 3, 4);
-  scene.add(key);
-  scene.add(key.target);
-
-  const rimViolet = new THREE.PointLight(0x9B7CFF, 2.2, 0, 2);
-  rimViolet.position.set(-2.6, 0.8, -1.6);
-  scene.add(rimViolet);
-
-  const rimGold = new THREE.PointLight(0xFFD500, 2.4, 0, 2);
-  rimGold.position.set(2.8, -0.7, -1.4);
-  scene.add(rimGold);
-
-  /* ── Puntero y scroll ─────────────────────────────────────────────────── */
-  const pointer = { x: 0, y: 0, tx: 0, ty: 0 };
-  if (!reduced) {
-    window.addEventListener('pointermove', (e) => {
-      pointer.tx = (e.clientX / window.innerWidth) * 2 - 1;
-      pointer.ty = -((e.clientY / window.innerHeight) * 2 - 1);
-    }, { passive: true });
-  }
-
-  const hero = document.getElementById('hero');
-  let heroProgress = 0;
-  function readScroll() {
-    const h = hero.offsetHeight || window.innerHeight;
-    heroProgress = Math.min(Math.max(window.scrollY / h, 0), 1);
-  }
-  readScroll();
-  window.addEventListener('scroll', readScroll, { passive: true });
-
-  /* ── Bucle ────────────────────────────────────────────────────────────── */
-  const targetQuat = new THREE.Quaternion();   // asignados una sola vez: crearlos
-  const scratchEuler = new THREE.Euler();      // por frame serían ~60 objetos/s.
-  const clock = new THREE.Clock();
-  let spin = 0;
-  let visible = true;
-  let revealed = false;
-
+  const hostEl = document.getElementById('scene');
   const gizmoOut = {
     x: document.querySelector('#gizmo [data-axis="x"]'),
     y: document.querySelector('#gizmo [data-axis="y"]'),
-    z: document.querySelector('#gizmo [data-axis="z"]')
+    z: document.querySelector('#gizmo [data-axis="z"]'),
   };
-  let gizmoTick = 0;
 
-  document.addEventListener('visibilitychange', () => { visible = !document.hidden; });
+  /* ── Geometría (una sola vez): misma silueta, sin cambios ────────────── */
+  const violetLightGeo = useMemo(() => shapesFrom(LOGO_PATHS.violetLight).map((s) => new THREE.ExtrudeGeometry(s, EXTRUDE_SETTINGS)), []);
+  const violetDarkGeo  = useMemo(() => shapesFrom(LOGO_PATHS.violetDark).map((s) => new THREE.ExtrudeGeometry(s, EXTRUDE_SETTINGS)), []);
+  const yellowGeo      = useMemo(() => shapesFrom(LOGO_PATHS.yellow).map((s) => new THREE.ExtrudeGeometry(s, EXTRUDE_SETTINGS)), []);
 
-  function frame() {
-    requestAnimationFrame(frame);
-    if (!visible) return;
+  const violetLightEdges = useMemo(() => violetLightGeo.map((g) => new THREE.EdgesGeometry(g, 15)), [violetLightGeo]);
+  const violetDarkEdges  = useMemo(() => violetDarkGeo.map((g) => new THREE.EdgesGeometry(g, 15)), [violetDarkGeo]);
+  const yellowEdges      = useMemo(() => yellowGeo.map((g) => new THREE.EdgesGeometry(g, 15)), [yellowGeo]);
 
-    /* Tras cambiar de pestaña, delta puede llegar como varios segundos y la
-       marca daría una vuelta entera en un frame. */
-    const dt = Math.min(clock.getDelta(), 1 / 30);
+  /*
+    ── Materiales: cristal semitransparente con emisión propia ─────────────
 
-    if (!reduced) spin += dt * 0.24;
+    `transparent:true` + `opacity` normal aquí es seguro — nada que ver con el
+    `transmission` de una versión anterior. transmission necesitaba un plano
+    OPACO detrás para tener algo que refractar (si no, se ve gris) y ESE plano
+    de tamaño fijo fue el origen del "cuadrado con bordes duros" reportado.
+    Este `opacity` es una simple mezcla alfa: no exige nada detrás, así que no
+    puede reproducir ese bug pase lo que pase con el aspecto de pantalla.
 
-    /* El scroll monta su rotación sobre el giro en reposo: la marca girando
-       es el motor visual de toda la secuencia del hero. */
-    const scrollSpin = reduced ? 0 : heroProgress * Math.PI * 2.4;
+    `side: DoubleSide` dejar ver la cara interior a través de la exterior —
+    es lo que hace que un sólido semitransparente se lea como hueco/proyectado
+    en vez de como un cristal de color macizo.
+  */
+  const matVioletLight = useMemo(() => new THREE.MeshPhysicalMaterial({
+    color: NEON_VIOLET, transparent: true, opacity: 0.5, emissive: NEON_VIOLET, emissiveIntensity: 0.6,
+    roughness: 0.15, metalness: 0.05, clearcoat: 0.3, clearcoatRoughness: 0.2, side: THREE.DoubleSide, depthWrite: false,
+  }), []);
+  const matVioletDark = useMemo(() => new THREE.MeshPhysicalMaterial({
+    color: NEON_VIOLET_DARK, transparent: true, opacity: 0.5, emissive: NEON_VIOLET_DARK, emissiveIntensity: 0.55,
+    roughness: 0.17, metalness: 0.05, clearcoat: 0.3, clearcoatRoughness: 0.2, side: THREE.DoubleSide, depthWrite: false,
+  }), []);
+  const matYellow = useMemo(() => new THREE.MeshPhysicalMaterial({
+    color: NEON_GOLD, transparent: true, opacity: 0.5, emissive: NEON_GOLD, emissiveIntensity: 0.65,
+    roughness: 0.13, metalness: 0.05, clearcoat: 0.35, clearcoatRoughness: 0.15, side: THREE.DoubleSide, depthWrite: false,
+  }), []);
+
+  const wireVioletMat = useMemo(() => new THREE.MeshBasicMaterial({ color: NEON_VIOLET, wireframe: true, transparent: true, opacity: 0.3, toneMapped: false, depthWrite: false }), []);
+  const wireGoldMat   = useMemo(() => new THREE.MeshBasicMaterial({ color: NEON_GOLD, wireframe: true, transparent: true, opacity: 0.3, toneMapped: false, depthWrite: false }), []);
+  const edgeVioletMat = useMemo(() => new THREE.LineBasicMaterial({ color: NEON_VIOLET, transparent: true, opacity: 0.9, toneMapped: false }), []);
+  const edgeGoldMat   = useMemo(() => new THREE.LineBasicMaterial({ color: NEON_GOLD, transparent: true, opacity: 0.9, toneMapped: false }), []);
+
+  /* Resplandor: mismo truco de sprite aditivo con degradado en canvas de
+     siempre — transparente de verdad, se desvanece solo en su borde. */
+  const glowTexture = useMemo(() => {
+    const c = document.createElement('canvas');
+    c.width = c.height = 256;
+    const ctx = c.getContext('2d');
+    const g = ctx.createRadialGradient(128, 128, 0, 128, 128, 128);
+    g.addColorStop(0, 'rgba(168,85,247,0.5)');
+    g.addColorStop(0.5, 'rgba(250,204,21,0.16)');
+    g.addColorStop(1, 'rgba(250,204,21,0)');
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, 256, 256);
+    return new THREE.CanvasTexture(c);
+  }, []);
+
+  const ambientGeo = useMemo(() => {
+    const count = isMobile ? 70 : 140;
+    const g = new THREE.BufferGeometry();
+    const pos = new Float32Array(count * 3);
+    for (let i = 0; i < count; i++) {
+      pos[i * 3 + 0] = (Math.random() - 0.5) * 9;
+      pos[i * 3 + 1] = (Math.random() - 0.5) * 5.5;
+      pos[i * 3 + 2] = (Math.random() - 0.5) * 5 - 1;
+    }
+    g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    return g;
+  }, []);
+
+  /* Aros HUD: línea punteada, no tubo — el eje que NO anima el frame loop
+     (rotation.z en el violeta, rotation.x en el dorado) se fija una sola vez
+     aquí, igual que en la versión de tubos anterior. */
+  const ringVioletLine = useMemo(() => {
+    const line = buildHudRing(2.75, NEON_VIOLET, isMobile ? 0.1 : 0.14, isMobile ? 0.08 : 0.1);
+    line.rotation.z = 0.12;
+    return line;
+  }, []);
+  const ringGoldLine = useMemo(() => {
+    const line = buildHudRing(2.3, NEON_GOLD, isMobile ? 0.09 : 0.12, isMobile ? 0.07 : 0.09);
+    line.rotation.x = -0.28;
+    return line;
+  }, []);
+
+  /* ── Puntero y scroll: mismos listeners de siempre, ahora escriben en un
+     ref (no en estado de React) para no forzar un re-render en cada evento —
+     useFrame los lee directamente, igual que el bucle manual anterior. ── */
+  useEffect(() => {
+    function onMove(e) {
+      input.current.tx = (e.clientX / window.innerWidth) * 2 - 1;
+      input.current.ty = -((e.clientY / window.innerHeight) * 2 - 1);
+    }
+    function onScroll() {
+      const heroEl = document.getElementById('hero');
+      const h = (heroEl && heroEl.offsetHeight) || window.innerHeight;
+      input.current.heroProgress = Math.min(Math.max(window.scrollY / h, 0), 1);
+    }
+    onScroll();
+    if (!reduced) window.addEventListener('pointermove', onMove, { passive: true });
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => {
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('scroll', onScroll);
+    };
+  }, []);
+
+  useFrame((state, rawDt) => {
+    if (document.hidden) return;
+    const dt = Math.min(rawDt, 1 / 30);
+    const clockT = state.clock.elapsedTime;
+
+    if (!reduced) spinRef.current += dt * 0.24;
+    const spin = spinRef.current;
+
+    const scrollSpin = reduced ? 0 : input.current.heroProgress * Math.PI * 2.4;
 
     const t = damp(0.0025, dt);
-    pointer.x += (pointer.tx - pointer.x) * t;
-    pointer.y += (pointer.ty - pointer.y) * t;
+    input.current.x += (input.current.tx - input.current.x) * t;
+    input.current.y += (input.current.ty - input.current.y) * t;
 
-    const tiltX = reduced ? 0 : -pointer.y * 0.3;
-    const tiltY = reduced ? 0 : pointer.x * 0.45;
+    const tiltX = reduced ? 0 : -input.current.y * 0.3;
+    const tiltY = reduced ? 0 : input.current.x * 0.45;
 
-    /* 0.18 rad de inclinación base: suficiente para insinuar el bisel y el
-       espesor sin exagerar — un isotipo delgado se lee bien casi de frente. */
-    scratchEuler.set(tiltX + 0.18, spin + scrollSpin + tiltY, tiltY * 0.14);
-    targetQuat.setFromEuler(scratchEuler);
-    mark.quaternion.slerp(targetQuat, damp(0.0015, dt));
+    scratchEuler.current.set(tiltX + 0.18, spin + scrollSpin + tiltY, tiltY * 0.14);
+    targetQuat.current.setFromEuler(scratchEuler.current);
+    markRef.current.quaternion.slerp(targetQuat.current, damp(0.0015, dt));
 
-    /* La marca se aleja mientras el hero se va. Encoger en la escena, no
-       desvanecer el canvas: el desvanecido lo hace la capa de arriba. */
-    const recede = reduced ? 1 : 1 + (0.68 - 1) * Math.min(heroProgress / 0.4, 1);
+    const recede = reduced ? 1 : 1 + (0.68 - 1) * Math.min(input.current.heroProgress / 0.4, 1);
 
-    /* Encaje responsive: se recalcula cada frame a partir del viewport, así
-       que rotar el teléfono lo re-encaja sin listener ni breakpoint. */
+    const camera = state.camera;
     const visibleH = 2 * camera.position.z * Math.tan((camera.fov * Math.PI / 180) / 2);
     const visibleW = visibleH * camera.aspect;
     const fit = softFit(visibleW);
-    mark.scale.setScalar(recede * fit * MARK_SCALE);
+    markRef.current.scale.setScalar(recede * fit * MARK_SCALE);
 
-    /* Composición: en escritorio la marca vive en la mitad derecha, donde el
-       hero le dejó la columna libre — centrarla en toda la pantalla la ponía
-       encima del titular. En móvil se centra arriba, sobre el bloque de
-       38svh que el hero reserva, porque ahí el texto se apila debajo en una
-       sola columna y no hay nada que tapar. Un balanceo vertical muy suave
-       (float) se suma encima — es el "hover" pedido, sin depender de que el
-       puntero esté sobre el objeto (en móvil no hay puntero que lo dispare). */
     const wide = visibleW / visibleH > 1.05;
     const float = reduced ? 0 : Math.sin(spin * 0.6) * 0.07;
-    mark.position.x = wide ? visibleW * 0.22 : 0;
-    mark.position.y = (wide ? 0.05 : visibleH * 0.16) + float;
+    const posX = wide ? visibleW * 0.22 : 0;
+    const posY = (wide ? 0.05 : visibleH * 0.16) + float;
+    markRef.current.position.set(posX, posY, -DEPTH * 0.6);
 
-    glow.position.x = mark.position.x;
-    glow.position.y = mark.position.y;
-    glow.scale.setScalar(4.6 * fit);
+    if (glowRef.current) {
+      glowRef.current.position.set(posX, posY, -1.4);
+      glowRef.current.scale.setScalar(4.6 * fit);
+    }
 
-    /* Las estelas envuelven la marca: mismo centro y la misma reducción de
-       escala al hacer scroll (recede*fit) que el propio isotipo, así que
-       encogen y se alejan juntos en vez de quedar flotando a un tamaño fijo
-       cuando el hero se va. */
-    energyGroup.position.set(mark.position.x, mark.position.y, mark.position.z);
-    energyGroup.scale.setScalar(recede * fit);
+    if (ringVioletRef.current) {
+      ringVioletRef.current.position.set(posX, posY, -DEPTH * 0.6);
+      ringVioletRef.current.scale.setScalar(recede * fit);
+    }
+    if (ringGoldRef.current) {
+      ringGoldRef.current.position.set(posX, posY, -DEPTH * 0.6);
+      ringGoldRef.current.scale.setScalar(recede * fit);
+    }
 
-    key.target.position.set(mark.position.x, mark.position.y, mark.position.z);
+    if (keyRef.current) keyRef.current.position.set(2.4 + posX * 0.3, 3, 4);
 
     if (!reduced) {
-      rimViolet.position.x = -2.6 + mark.position.x + pointer.x * 1.4;
-      rimViolet.position.y = 0.8 + mark.position.y + pointer.y * 0.6;
-      rimGold.position.x = 2.8 + mark.position.x - pointer.x * 1.4;
-      rimGold.position.y = -0.7 + mark.position.y - pointer.y * 0.6;
-      particles.rotation.y += dt * 0.015;
+      if (rimVioletRef.current) rimVioletRef.current.position.set(-2.6 + posX + input.current.x * 1.4, 0.8 + posY + input.current.y * 0.6, -1.6);
+      if (rimGoldRef.current) rimGoldRef.current.position.set(2.8 + posX - input.current.x * 1.4, -0.7 + posY - input.current.y * 0.6, -1.4);
+      if (ambientPointsRef.current) ambientPointsRef.current.rotation.y += dt * 0.015;
 
-      /* Cada aro gira a su propio ritmo y en su propio sentido — sincronizados
-         se leerían como una sola pieza mecánica girando, no como corrientes
-         independientes. El seno/coseno superpuesto es la "ondulación
-         orgánica" pedida: un balanceo del plano del aro, no solo un giro. */
-      ringViolet.rotation.y += dt * 0.18;
-      ringViolet.rotation.x = 0.35 + Math.sin(spin * 0.7) * 0.08;
-      ringGold.rotation.y -= dt * 0.24;
-      ringGold.rotation.z = -0.22 + Math.cos(spin * 0.55) * 0.09;
+      if (ringVioletRef.current) {
+        ringVioletRef.current.rotation.y += dt * 0.18;
+        ringVioletRef.current.rotation.x = 0.35 + Math.sin(spin * 0.7) * 0.08;
+      }
+      if (ringGoldRef.current) {
+        ringGoldRef.current.rotation.y -= dt * 0.24;
+        ringGoldRef.current.rotation.z = -0.22 + Math.cos(spin * 0.55) * 0.09;
+      }
     }
 
-    /* La escena se apaga bajo las secciones: allí el texto manda y el objeto
-       3D sería ruido detrás de párrafos. */
-    const presence = 1 - smootherstep(heroProgress) * 0.86;
-    host.style.opacity = revealed ? presence.toFixed(3) : '0';
+    /* Pulso: la emisión de los tres materiales respira con un seno sobre el
+       reloj de la escena — "el holograma procesando datos" pedido. */
+    const pulse = reduced ? 0 : Math.sin(clockT * 1.6);
+    matVioletLight.emissiveIntensity = 0.55 + pulse * 0.25;
+    matVioletDark.emissiveIntensity = 0.5 + pulse * 0.22;
+    matYellow.emissiveIntensity = 0.6 + pulse * 0.28;
 
-    renderer.render(scene, camera);
+    const presence = 1 - smootherstep(input.current.heroProgress) * 0.86;
+    if (hostEl) hostEl.style.opacity = revealed.current ? presence.toFixed(3) : '0';
+    if (!revealed.current) { revealed.current = true; document.body.dataset.webgl = 'on'; }
 
-    if (!revealed) { revealed = true; document.body.dataset.webgl = 'on'; }
-
-    /* El HUD se actualiza a ~7Hz, no a 60: escribir textContent cada frame es
-       trabajo de layout por un dato que nadie lee tan rápido. */
-    if (gizmoOut.x && ++gizmoTick % 9 === 0) {
-      gizmoOut.x.textContent = mark.quaternion.x.toFixed(2);
-      gizmoOut.y.textContent = mark.quaternion.y.toFixed(2);
-      gizmoOut.z.textContent = mark.quaternion.z.toFixed(2);
+    if (gizmoOut.x && ++gizmoTick.current % 9 === 0) {
+      gizmoOut.x.textContent = markRef.current.quaternion.x.toFixed(2);
+      gizmoOut.y.textContent = markRef.current.quaternion.y.toFixed(2);
+      gizmoOut.z.textContent = markRef.current.quaternion.z.toFixed(2);
     }
+  });
+
+  return (
+    <>
+      <ambientLight intensity={0.8} />
+      <directionalLight ref={keyRef} position={[2.4, 3, 4]} intensity={1.2} />
+      <pointLight ref={rimVioletRef} color={NEON_VIOLET} intensity={2.2} position={[-2.6, 0.8, -1.6]} decay={2} />
+      <pointLight ref={rimGoldRef} color={NEON_GOLD} intensity={2.4} position={[2.8, -0.7, -1.4]} decay={2} />
+
+      <points ref={ambientPointsRef} geometry={ambientGeo}>
+        <pointsMaterial color="#C9BFFF" size={0.028} transparent opacity={0.4} sizeAttenuation depthWrite={false} />
+      </points>
+
+      <sprite ref={glowRef} scale={[4.6, 4.6, 1]}>
+        <spriteMaterial map={glowTexture} transparent depthWrite={false} blending={THREE.AdditiveBlending} toneMapped={false} />
+      </sprite>
+
+      <primitive object={ringVioletLine} ref={ringVioletRef} />
+      <primitive object={ringGoldLine} ref={ringGoldRef} />
+
+      <group ref={markRef}>
+        {violetLightGeo.map((geo, i) => (
+          <group key={`vl-${i}`}>
+            <mesh geometry={geo} material={matVioletLight} />
+            <mesh geometry={geo} material={wireVioletMat} />
+            <lineSegments geometry={violetLightEdges[i]} material={edgeVioletMat} />
+          </group>
+        ))}
+        {violetDarkGeo.map((geo, i) => (
+          <group key={`vd-${i}`}>
+            <mesh geometry={geo} material={matVioletDark} />
+            <mesh geometry={geo} material={wireVioletMat} />
+            <lineSegments geometry={violetDarkEdges[i]} material={edgeVioletMat} />
+          </group>
+        ))}
+        {yellowGeo.map((geo, i) => (
+          <group key={`y-${i}`} position-z={DEPTH * 0.4}>
+            <mesh geometry={geo} material={matYellow} />
+            <mesh geometry={geo} material={wireGoldMat} />
+            <lineSegments geometry={yellowEdges[i]} material={edgeGoldMat} />
+          </group>
+        ))}
+        <DataDust count={isMobile ? 40 : 90} parentHalfExtents={[0.46, 0.52, 0.3]} />
+      </group>
+    </>
+  );
+}
+
+function hasWebGL() {
+  try {
+    const c = document.createElement('canvas');
+    return !!(window.WebGLRenderingContext && (c.getContext('webgl2') || c.getContext('webgl')));
+  } catch (e) {
+    return false;
   }
-  frame();
+}
 
-  /* ── Resize ───────────────────────────────────────────────────────────── */
-  let resizeRaf = 0;
-  window.addEventListener('resize', () => {
-    cancelAnimationFrame(resizeRaf);
-    resizeRaf = requestAnimationFrame(() => {
-      camera.aspect = window.innerWidth / window.innerHeight;
-      camera.updateProjectionMatrix();
-      renderer.setSize(window.innerWidth, window.innerHeight);
-      readScroll();
-    });
-  }, { passive: true });
+const mountEl = document.getElementById('scene');
+if (mountEl && hasWebGL()) {
+  createRoot(mountEl).render(
+    <Canvas
+      dpr={[1, isMobile ? 1.5 : 2]}
+      gl={{ antialias: true, alpha: true, powerPreference: 'high-performance' }}
+      camera={{ fov: 38, position: [0, 0, 6] }}
+      onCreated={({ gl }) => {
+        gl.toneMapping = THREE.ACESFilmicToneMapping;
+        gl.toneMappingExposure = 1.0;
+      }}
+    >
+      <HologramMark />
+    </Canvas>
+  );
+} else {
+  console.warn('[CLAPI] WebGL no disponible, se mantiene el fondo CSS.');
 }
 </script>
 </body>
