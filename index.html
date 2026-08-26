@@ -20,7 +20,7 @@
 
 <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
 
-<!-- three.js — el prisma vive aquí -->
+<!-- three.js — el isotipo 3D del hero vive aquí -->
 <script type="importmap">
 {
   "imports": {
@@ -299,8 +299,9 @@
         </dl>
       </div>
 
-      <!-- Columna derecha: espacio reservado para el prisma 3D.
-           En móvil el prisma se centra y esto solo aporta altura. -->
+      <!-- Espaciador: el isotipo 3D ahora se centra en toda la pantalla (capa
+           fija, independiente del grid), así que esto solo reserva la altura
+           que el objeto necesita por encima del texto en móvil. -->
       <div class="pointer-events-none order-first h-[38svh] lg:order-none lg:col-span-6 lg:col-start-7 lg:h-[70svh]" aria-hidden="true"></div>
     </div>
   </div>
@@ -1144,13 +1145,17 @@ import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 /*
   ── El isotipo CLAPI en 3D ───────────────────────────────────────────────────
 
-  Antes había un prisma de vidrio flotando delante de un plano con el logo en
-  2D detrás de él (el sujeto de refracción) — dos representaciones del mismo
-  logo a la vez, una difusa y una nítida. Ahora hay una sola: el isotipo real,
-  extruido a partir de su silueta vectorial, con material físico opaco. Mismo
-  pipeline de extracción que logo3D.html (ver ese archivo para el detalle del
-  trazado de contorno) — se duplica LOGO_PATHS aquí porque este sitio es HTML
-  plano sin build, así que no hay módulo compartido entre páginas.
+  Una sola representación del logo: el isotipo real, extruido a partir de su
+  silueta vectorial (mismo pipeline que logo3D.html — se duplica LOGO_PATHS
+  aquí porque este sitio es HTML plano sin build, sin módulo compartido entre
+  páginas). Material satinado opaco, no cristal: la versión con
+  `transmission` obligaba a poner un plano OPACO detrás de la marca para que
+  el vidrio tuviera algo que refractar (si no, se ve gris) — ese plano tenía
+  un tamaño fijo en unidades de mundo que no escalaba con el aspecto de la
+  pantalla, así que en viewports más angostos o más anchos que el de diseño
+  se veía su borde recto: el "cuadrado morado con bordes duros" reportado.
+  Sin transmisión, ese plano deja de ser necesario y el canvas vuelve a ser
+  transparente de verdad en todas partes.
 */
 
 const host = document.getElementById('scene');
@@ -1193,10 +1198,6 @@ if (renderer) {
   renderer.setSize(window.innerWidth, window.innerHeight);
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1.0;
-  /* PCFSoftShadowMap: la variante con bordes suaves del mapa de sombras
-     estándar de three, sin el coste de un blur separado. */
-  renderer.shadowMap.enabled = true;
-  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   host.appendChild(renderer.domElement);
 
   const scene = new THREE.Scene();
@@ -1205,12 +1206,12 @@ if (renderer) {
   const camera = new THREE.PerspectiveCamera(38, window.innerWidth / window.innerHeight, 0.1, 100);
   camera.position.set(0, 0, 6);
 
-  /* Entorno neutro y tenue: aporta reflejos de estudio sutiles a la laca del
-     material sin teñirlo — el color lo ponen las luces de marca, no el
-     entorno. Más intensidad que esto y el amarillo se satura a blanco. */
+  /* Entorno neutro y tenue: le da a la laca satinada un reflejo de estudio
+     limpio en los bordes sin teñirla — el color lo llevan los materiales,
+     no el entorno. */
   const pmrem = new THREE.PMREMGenerator(renderer);
   scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
-  scene.environmentIntensity = 0.38;
+  scene.environmentIntensity = 0.35;
 
   /* ── Geometría: extrusión de la silueta real del isotipo ─────────────── */
   function shapeFromPolygon(outer, holes) {
@@ -1219,9 +1220,13 @@ if (renderer) {
     return shape;
   }
 
-  const MARK_SCALE = 2.6;
-  const DEPTH = 0.16;
-  const extrudeSettings = { depth: DEPTH, bevelEnabled: true, bevelThickness: 0.02, bevelSize: 0.017, bevelSegments: 5, curveSegments: 1 };
+  const MARK_SCALE = 2.5;
+  /* Delgada a propósito: 0.15 de profundidad da un bisel visible sin que el
+     objeto deje de leerse como un isotipo (chapa con relieve), no como un
+     bloque. Bisel suave (bevelSegments 6) para que el borde se vea pulido en
+     vez de facetado, sin la exageración de una versión anterior. */
+  const DEPTH = 0.15;
+  const extrudeSettings = { depth: DEPTH, bevelEnabled: true, bevelThickness: 0.022, bevelSize: 0.02, bevelSegments: 6, curveSegments: 1 };
 
   /* Sin geo.center(): las piezas deben conservar su posición relativa (la
      cinta amarilla cae exactamente sobre el hueco de la "C"); centrar cada
@@ -1231,19 +1236,17 @@ if (renderer) {
     for (const { outer, holes } of entries) {
       const mesh = new THREE.Mesh(new THREE.ExtrudeGeometry(shapeFromPolygon(outer, holes), extrudeSettings), material);
       mesh.position.z = zOffset;
-      mesh.castShadow = true;
-      mesh.receiveShadow = true;
       group.add(mesh);
     }
     return group;
   }
 
-  /* Rugosidad moderada + clearcoat bajo: laca satinada, no un plástico
-     espejado — a metalness/roughness más bajos el amarillo se quemaba a
-     blanco bajo las luces de acento (visto al construir logo3D.html). */
-  const matVioletLight = new THREE.MeshPhysicalMaterial({ color: '#5B34E8', roughness: 0.42, metalness: 0.08, clearcoat: 0.45, clearcoatRoughness: 0.4 });
-  const matVioletDark  = new THREE.MeshPhysicalMaterial({ color: '#2E1580', roughness: 0.44, metalness: 0.08, clearcoat: 0.4,  clearcoatRoughness: 0.4 });
-  const matYellow      = new THREE.MeshPhysicalMaterial({ color: '#FFD500', roughness: 0.38, metalness: 0.05, clearcoat: 0.4,  clearcoatRoughness: 0.4 });
+  /* Laca satinada: roughness/metalness bajos para un reflejo limpio en los
+     bordes sin leerse como metal ni como plástico apagado. Sin transmission
+     ni emissive — ver la nota de arriba sobre por qué el cristal se abandonó. */
+  const matVioletLight = new THREE.MeshPhysicalMaterial({ color: '#5B34E8', roughness: 0.2, metalness: 0.1, clearcoat: 0.4, clearcoatRoughness: 0.2 });
+  const matVioletDark  = new THREE.MeshPhysicalMaterial({ color: '#2E1580', roughness: 0.22, metalness: 0.1, clearcoat: 0.35, clearcoatRoughness: 0.22 });
+  const matYellow      = new THREE.MeshPhysicalMaterial({ color: '#FFD500', roughness: 0.18, metalness: 0.08, clearcoat: 0.4, clearcoatRoughness: 0.18 });
 
   const mark = new THREE.Group();
   const ring = buildGroup(LOGO_PATHS.violetLight, matVioletLight, 0);
@@ -1257,38 +1260,28 @@ if (renderer) {
   scene.add(mark);
 
   /*
-    Resplandor detrás de la marca: un sprite aditivo con un degradado radial
-    generado en canvas (sin pedir otra imagen), en los dos colores de marca.
-    additive + depthWrite:false para que se sume a lo que hay detrás en vez de
-    taparlo — es luz, no una superficie.
+    Resplandor detrás de la marca: un sprite ADITIVO con un degradado radial
+    generado en canvas (sin pedir otra imagen). Transparente de verdad, no un
+    plano opaco: un sprite con blending aditivo se desvanece a la nada en su
+    propio borde sin importar la resolución ni el aspecto de la pantalla, así
+    que no puede producir el "cuadrado con bordes duros" que sí producía el
+    plano opaco que el cristal necesitaba.
   */
   const glowCanvas = document.createElement('canvas');
   glowCanvas.width = glowCanvas.height = 256;
   const gctx = glowCanvas.getContext('2d');
   const glowGrad = gctx.createRadialGradient(128, 128, 0, 128, 128, 128);
-  glowGrad.addColorStop(0, 'rgba(155,124,255,0.55)');
-  glowGrad.addColorStop(0.5, 'rgba(255,213,0,0.18)');
+  glowGrad.addColorStop(0, 'rgba(155,124,255,0.5)');
+  glowGrad.addColorStop(0.5, 'rgba(255,213,0,0.16)');
   glowGrad.addColorStop(1, 'rgba(255,213,0,0)');
   gctx.fillStyle = glowGrad;
   gctx.fillRect(0, 0, 256, 256);
   const glow = new THREE.Sprite(new THREE.SpriteMaterial({
     map: new THREE.CanvasTexture(glowCanvas), transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
   }));
-  glow.scale.setScalar(5.2);
+  glow.scale.setScalar(4.6);
   glow.position.z = -1.4;
   scene.add(glow);
-
-  /* Suelo invisible que solo pinta la sombra que cae sobre él (ShadowMaterial
-     no se ve a sí mismo, únicamente la sombra proyectada) — da apoyo/peso a
-     la marca sin necesitar un plano visible ni geometría de piso real. */
-  const shadowCatcher = new THREE.Mesh(
-    new THREE.PlaneGeometry(9, 9),
-    new THREE.ShadowMaterial({ opacity: 0.32 })
-  );
-  shadowCatcher.rotation.x = -Math.PI / 2;
-  shadowCatcher.position.y = -1.7;
-  shadowCatcher.receiveShadow = true;
-  scene.add(shadowCatcher);
 
   /* ── Partículas: motas de marca a la deriva, muy tenues ────────────────── */
   const PARTICLE_COUNT = isMobile ? 70 : 140;
@@ -1305,32 +1298,71 @@ if (renderer) {
   }));
   scene.add(particles);
 
-  /* ── Iluminación cinemática ─────────────────────────────────────────────
-     Ambiental tenue + direccional principal con sombra suave + dos acentos
-     de color (violeta y dorado) que resaltan el volumen sin quemar el
-     amarillo — las intensidades altas de una prueba anterior lo saturaban
-     a blanco bajo el mismo ACESFilmicToneMapping que se usa aquí. */
-  const ambient = new THREE.AmbientLight(0xffffff, 0.28);
+  /*
+    ── Estelas energéticas: venas de luz orbitando el isotipo ───────────────
+
+    Dos aros de tubo (CatmullRomCurve3 cerrada + TubeGeometry), cada uno en un
+    plano distinto y a un radio distinto, para que no se lean como un anillo
+    plano único. Colores de marca: violeta claro y dorado, los mismos tokens
+    que ya usa el resto del sitio (--color-brand-lite / --color-accent) en vez
+    de introducir hex nuevos.
+
+    Additive + `transparent:true`: aquí es seguro, a diferencia del intento
+    con vidrio de una versión anterior — sin material de transmisión en la
+    escena, no hay una cola de "objetos opacos" de la que sacar estas líneas,
+    así que no hay riesgo de reproducir el bug del cuadrado con bordes duros.
+    Additive además es lo que las hace leerse como luz y no como un cable: se
+    suman al fondo en vez de taparlo, y se desvanecen solas en los extremos
+    finos del tubo sin necesitar una textura con alpha.
+  */
+  function energyRing(radius, tiltX, tiltZ, color, tubeRadius) {
+    const points = [];
+    const N = 10;
+    for (let i = 0; i < N; i++) {
+      const a = (i / N) * Math.PI * 2;
+      points.push(new THREE.Vector3(Math.cos(a) * radius, Math.sin(a) * radius * 0.82, 0));
+    }
+    const curve = new THREE.CatmullRomCurve3(points, true, 'catmullrom', 0.5);
+    const geo = new THREE.TubeGeometry(curve, 90, tubeRadius, 8, true);
+    const mesh = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({
+      color, transparent: true, opacity: 0.45, blending: THREE.AdditiveBlending, toneMapped: false, depthWrite: false,
+    }));
+    mesh.rotation.x = tiltX;
+    mesh.rotation.z = tiltZ;
+    return mesh;
+  }
+
+  const energyGroup = new THREE.Group();
+  const ringViolet = energyRing(2.75, 0.35, 0.12, '#9B7CFF', isMobile ? 0.026 : 0.034);
+  const ringGold = energyRing(2.3, -0.28, -0.22, '#FFD500', isMobile ? 0.02 : 0.027);
+  energyGroup.add(ringViolet, ringGold);
+  scene.add(energyGroup);
+
+  /*
+    ── Iluminación: simple y plana, sin sombras proyectadas ────────────────
+
+    Sin `castShadow`/`receiveShadow` ni mapa de sombras: un ShadowMaterial mal
+    encajado con la escala del objeto es exactamente lo que producía los
+    "bloques negros feos" reportados. Ambiental alta + una direccional suave
+    iluminan el volumen de forma pareja; dos acentos de color a intensidad
+    baja (no puntos de luz "quemados") le dan el toque de marca en los bordes
+    sin crear contraste duro.
+  */
+  const ambient = new THREE.AmbientLight(0xffffff, 0.8);
   scene.add(ambient);
 
-  const key = new THREE.DirectionalLight(0xffffff, 1.5);
+  const key = new THREE.DirectionalLight(0xffffff, 1.2);
   key.position.set(2.4, 3, 4);
-  key.castShadow = true;
-  key.shadow.mapSize.set(isMobile ? 512 : 1024, isMobile ? 512 : 1024);
-  key.shadow.camera.left = -3; key.shadow.camera.right = 3;
-  key.shadow.camera.top = 3; key.shadow.camera.bottom = -3;
-  key.shadow.camera.near = 1; key.shadow.camera.far = 10;
-  key.shadow.bias = -0.0015;
   scene.add(key);
   scene.add(key.target);
 
-  const accentViolet = new THREE.PointLight(0x9B7CFF, 4.5, 0, 1.8);
-  accentViolet.position.set(-3.2, 1, 2.4);
-  scene.add(accentViolet);
+  const rimViolet = new THREE.PointLight(0x9B7CFF, 2.2, 0, 2);
+  rimViolet.position.set(-2.6, 0.8, -1.6);
+  scene.add(rimViolet);
 
-  const accentGold = new THREE.PointLight(0xFFD500, 5, 0, 1.8);
-  accentGold.position.set(3.4, -1, 1.8);
-  scene.add(accentGold);
+  const rimGold = new THREE.PointLight(0xFFD500, 2.4, 0, 2);
+  rimGold.position.set(2.8, -0.7, -1.4);
+  scene.add(rimGold);
 
   /* ── Puntero y scroll ─────────────────────────────────────────────────── */
   const pointer = { x: 0, y: 0, tx: 0, ty: 0 };
@@ -1388,9 +1420,8 @@ if (renderer) {
     const tiltX = reduced ? 0 : -pointer.y * 0.3;
     const tiltY = reduced ? 0 : pointer.x * 0.45;
 
-    /* 0.18 rad de inclinación base: a diferencia del prisma, el isotipo se
-       lee bien casi de frente — solo necesita un giro leve para mostrar el
-       bisel y el espesor de la extrusión. */
+    /* 0.18 rad de inclinación base: suficiente para insinuar el bisel y el
+       espesor sin exagerar — un isotipo delgado se lee bien casi de frente. */
     scratchEuler.set(tiltX + 0.18, spin + scrollSpin + tiltY, tiltY * 0.14);
     targetQuat.setFromEuler(scratchEuler);
     mark.quaternion.slerp(targetQuat, damp(0.0015, dt));
@@ -1407,8 +1438,10 @@ if (renderer) {
     mark.scale.setScalar(recede * fit * MARK_SCALE);
 
     /* Composición: en escritorio la marca vive en la mitad derecha, donde el
-       hero le dejó la columna libre; en móvil se centra arriba, sobre el
-       bloque de 38svh que el hero reserva. Un balanceo vertical muy suave
+       hero le dejó la columna libre — centrarla en toda la pantalla la ponía
+       encima del titular. En móvil se centra arriba, sobre el bloque de
+       38svh que el hero reserva, porque ahí el texto se apila debajo en una
+       sola columna y no hay nada que tapar. Un balanceo vertical muy suave
        (float) se suma encima — es el "hover" pedido, sin depender de que el
        puntero esté sobre el objeto (en móvil no hay puntero que lo dispare). */
     const wide = visibleW / visibleH > 1.05;
@@ -1418,17 +1451,32 @@ if (renderer) {
 
     glow.position.x = mark.position.x;
     glow.position.y = mark.position.y;
-    glow.scale.setScalar(5.2 * fit);
-    shadowCatcher.position.x = mark.position.x;
+    glow.scale.setScalar(4.6 * fit);
+
+    /* Las estelas envuelven la marca: mismo centro y la misma reducción de
+       escala al hacer scroll (recede*fit) que el propio isotipo, así que
+       encogen y se alejan juntos en vez de quedar flotando a un tamaño fijo
+       cuando el hero se va. */
+    energyGroup.position.set(mark.position.x, mark.position.y, mark.position.z);
+    energyGroup.scale.setScalar(recede * fit);
 
     key.target.position.set(mark.position.x, mark.position.y, mark.position.z);
 
     if (!reduced) {
-      accentViolet.position.x = -3.2 + mark.position.x + pointer.x * 1.4;
-      accentViolet.position.y = 1 + pointer.y * 0.6;
-      accentGold.position.x = 3.4 + mark.position.x - pointer.x * 1.4;
-      accentGold.position.y = -1 - pointer.y * 0.6;
+      rimViolet.position.x = -2.6 + mark.position.x + pointer.x * 1.4;
+      rimViolet.position.y = 0.8 + mark.position.y + pointer.y * 0.6;
+      rimGold.position.x = 2.8 + mark.position.x - pointer.x * 1.4;
+      rimGold.position.y = -0.7 + mark.position.y - pointer.y * 0.6;
       particles.rotation.y += dt * 0.015;
+
+      /* Cada aro gira a su propio ritmo y en su propio sentido — sincronizados
+         se leerían como una sola pieza mecánica girando, no como corrientes
+         independientes. El seno/coseno superpuesto es la "ondulación
+         orgánica" pedida: un balanceo del plano del aro, no solo un giro. */
+      ringViolet.rotation.y += dt * 0.18;
+      ringViolet.rotation.x = 0.35 + Math.sin(spin * 0.7) * 0.08;
+      ringGold.rotation.y -= dt * 0.24;
+      ringGold.rotation.z = -0.22 + Math.cos(spin * 0.55) * 0.09;
     }
 
     /* La escena se apaga bajo las secciones: allí el texto manda y el objeto
