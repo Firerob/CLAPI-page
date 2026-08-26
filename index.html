@@ -1415,18 +1415,39 @@ function HologramMark() {
     targetQuat.current.setFromEuler(scratchEuler.current);
     markRef.current.quaternion.slerp(targetQuat.current, damp(0.0015, dt));
 
-    const recede = reduced ? 1 : 1 + (0.68 - 1) * Math.min(input.current.heroProgress / 0.4, 1);
-
     const camera = state.camera;
     const visibleH = 2 * camera.position.z * Math.tan((camera.fov * Math.PI / 180) / 2);
     const visibleW = visibleH * camera.aspect;
     const fit = softFit(visibleW);
+
+    /*
+      ── Intro insignia → posición fija en el hero ─────────────────────────
+
+      introT recorre 0→1 en el primer 35% del scroll del hero (smootherstep,
+      no lineal, para que el acomodo frene en vez de detenerse en seco). En
+      introT=0 (tope de página) el objeto vive en el centro absoluto (x=0,
+      y=0) a su escala más grande — la "insignia de presentación" pedida. A
+      medida que crece, interpola hacia la posición y escala de reposo que
+      ya tenía la escena (derecha en escritorio, arriba centrado en móvil).
+
+      reduced-motion salta directo a introT=1: la composición de reposo es
+      la que no depende de que el usuario haga scroll para verse bien, así
+      que es la que se le muestra siempre a quien pidió sin animaciones.
+    */
+    const wide = visibleW / visibleH > 1.05;
+    const introT = reduced ? 1 : smootherstep(Math.min(input.current.heroProgress / 0.35, 1));
+    const restX = wide ? visibleW * 0.22 : 0;
+    const restY = wide ? 0.05 : visibleH * 0.16;
+
+    /* 1.15 → 0.72: arranca más grande que el reposo anterior (que iba de 1 a
+       0.68) para leerse como insignia protagonista, y termina dentro del
+       rango 0.7–0.85 pedido para la posición ya fijada en el hero. */
+    const recede = THREE.MathUtils.lerp(1.15, 0.72, introT);
     markRef.current.scale.setScalar(recede * fit * MARK_SCALE);
 
-    const wide = visibleW / visibleH > 1.05;
     const float = reduced ? 0 : Math.sin(spin * 0.6) * 0.07;
-    const posX = wide ? visibleW * 0.22 : 0;
-    const posY = (wide ? 0.05 : visibleH * 0.16) + float;
+    const posX = THREE.MathUtils.lerp(0, restX, introT);
+    const posY = THREE.MathUtils.lerp(0, restY, introT) + float;
     markRef.current.position.set(posX, posY, -DEPTH * 0.6);
 
     if (glowRef.current) {
@@ -1533,9 +1554,20 @@ function hasWebGL() {
   }
 }
 
-const mountEl = document.getElementById('scene');
-if (mountEl && hasWebGL()) {
-  createRoot(mountEl).render(
+/*
+  ── Brand3DCanvas ────────────────────────────────────────────────────────
+
+  El "HeroSection.tsx" de la petición ya existe en este archivo: es el <section
+  id="hero"> de HTML plano de más arriba (titular, botones, badges, cue de
+  scroll) — no se reescribió como componente React porque nada de esto pide
+  que lo sea, y hacerlo duplicaría markup que ya funciona. Este componente es
+  el equivalente de "Brand3DCanvas.tsx": el Canvas y toda la lógica acoplada
+  al scroll viven aquí, montados sobre #scene (position:fixed, pointer-events:
+  none, ya lo tenía la página) — eso YA es el "sticky canvas transparente que
+  no bloquea clics" pedido, sin nada nuevo que añadir ahí.
+*/
+function Brand3DCanvas() {
+  return (
     <Canvas
       dpr={[1, isMobile ? 1.5 : 2]}
       gl={{ antialias: true, alpha: true, powerPreference: 'high-performance' }}
@@ -1548,6 +1580,11 @@ if (mountEl && hasWebGL()) {
       <HologramMark />
     </Canvas>
   );
+}
+
+const mountEl = document.getElementById('scene');
+if (mountEl && hasWebGL()) {
+  createRoot(mountEl).render(<Brand3DCanvas />);
 } else {
   console.warn('[CLAPI] WebGL no disponible, se mantiene el fondo CSS.');
 }
