@@ -1,0 +1,10 @@
+# Repos clonados como referencia — no son parte de este proyecto
+proyecto ejemplo/
+.claude/skills/ui-ux-pro-max-skill/
+
+# Artefactos de graphify (regenerables, quedan desactualizados en cuanto cambia el código)
+graphify-out/
+
+# Sistema / editor
+.DS_Store
+Thumbs.db

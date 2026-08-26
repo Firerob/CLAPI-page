@@ -1,0 +1,1467 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CLAPI — Automatizamos lo que hace crecer tu negocio</title>
+<meta name="description" content="CLAPI diseña y construye software a la medida e inteligencia artificial que automatiza operaciones empresariales complejas: procesos, dashboards, agentes de voz e integraciones en la nube.">
+<meta name="theme-color" content="#06050C">
+
+<meta property="og:type" content="website">
+<meta property="og:title" content="CLAPI — Software a la medida + IA">
+<meta property="og:description" content="Automatizamos lo que frena tu crecimiento.">
+<meta property="og:image" content="diseño/Isotipo-transparent.png">
+
+<link rel="icon" href="diseño/Isotipo-transparent.png">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+<script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+
+<!-- three.js — el prisma vive aquí -->
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/"
+  }
+}
+</script>
+
+<style type="text/tailwindcss">
+  /* ────────────────────────────────────────────────────────────────
+     TOKENS DE MARCA CLAPI — fuente: diseño/Clapi-systemDesing.png
+     Cambiar un valor aquí cambia toda la página.
+     ──────────────────────────────────────────────────────────────── */
+  @theme {
+    --color-void:       #06050C;  /* fondo real de la escena 3D */
+    --color-ink:        #0D0B14;  /* fondo corporativo */
+    --color-surface:    #13101E;
+    --color-surface-2:  #1A1628;
+
+    /* Violeta: SOLO relleno/borde/glow. Sobre void da 2.4:1 — no es texto. */
+    --color-brand:      #532CE1;
+    --color-brand-deep: #2E1580;
+    --color-brand-lite: #9B7CFF;  /* el violeta legible: 6.7:1 sobre void */
+
+    --color-accent:     #FFD500;  /* 14.7:1 sobre void */
+
+    --color-lav:        #EDE6FF;
+    --color-paper:      #F7F7F7;
+    --color-muted:      #B9B4C7;
+
+    --color-line:       rgba(237, 230, 255, 0.10);
+    --color-line-soft:  rgba(237, 230, 255, 0.055);
+
+    --font-sans: "Sora", ui-sans-serif, system-ui, -apple-system, sans-serif;
+    --font-mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", monospace;
+
+    --radius-brand: 1.25rem;
+  }
+</style>
+
+<style>
+  html { scroll-behavior: smooth; }
+  body { background-color: #06050C; }
+
+  /* ── Capa 3D: fija, detrás de todo, atraviesa clics ─────────────── */
+  #scene {
+    position: fixed; inset: 0; z-index: 0;
+    pointer-events: none;
+    opacity: 0;                       /* el JS la sube al primer frame válido */
+    transition: opacity .9s cubic-bezier(.22,.8,.32,1);
+  }
+  #scene canvas { display: block; width: 100%; height: 100%; }
+
+  /*
+    Fondo ambiental: tres manchas de color muy desenfocadas, siempre visibles
+    — no solo como respaldo si WebGL falla. El canvas ahora es transparente
+    (ya no hay vidrio con transmisión que necesite un fondo opaco detrás), así
+    que estas manchas se ven A TRAVÉS de él en vez de quedar tapadas.
+  */
+  .aurora-fallback { transition: opacity .8s ease; }
+
+  /* ── Rejilla técnica ────────────────────────────────────────────── */
+  .grid-tech {
+    background-image:
+      linear-gradient(to right,  rgba(155,124,255,.09) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(155,124,255,.09) 1px, transparent 1px);
+    background-size: 72px 72px;
+    mask-image: radial-gradient(ellipse 75% 60% at 50% 40%, #000 30%, transparent 76%);
+    -webkit-mask-image: radial-gradient(ellipse 75% 60% at 50% 40%, #000 30%, transparent 76%);
+  }
+
+  /* ── Grano de película ──────────────────────────────────────────── */
+  .grain {
+    position: fixed; inset: -50%; z-index: 3;
+    pointer-events: none; opacity: .035;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    animation: grain-shift 7s steps(6) infinite;
+  }
+  @keyframes grain-shift {
+    0%,100% { transform: translate(0,0) }
+    16% { transform: translate(-3%,-2%) }  33% { transform: translate(2%,-3%) }
+    50% { transform: translate(-2%,3%) }   66% { transform: translate(3%,2%) }
+    83% { transform: translate(-3%,1%) }
+  }
+
+  /* ── Viñeta: protege el contraste del texto sobre la escena ─────── */
+  .vignette {
+    position: fixed; inset: 0; z-index: 2; pointer-events: none;
+    background: radial-gradient(ellipse at center, transparent 30%, rgba(6,5,12,.80) 100%);
+  }
+
+  /* ── Borde degradado hairline ───────────────────────────────────── */
+  .ring-gradient { position: relative; }
+  .ring-gradient::before {
+    content: ""; position: absolute; inset: 0; border-radius: inherit; padding: 1px;
+    background: linear-gradient(140deg, rgba(255,213,0,.5), rgba(155,124,255,.32) 45%, rgba(255,255,255,.03) 75%);
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor; mask-composite: exclude;
+    pointer-events: none;
+  }
+
+  /* ── Reveal on scroll ───────────────────────────────────────────── */
+  .reveal { opacity: 0; transform: translateY(24px); }
+  .reveal-in {
+    opacity: 1; transform: none;
+    transition: opacity .7s cubic-bezier(.16,1,.3,1), transform .7s cubic-bezier(.16,1,.3,1);
+  }
+
+  @keyframes clapi-marquee { from { transform: translateX(0) } to { transform: translateX(-50%) } }
+  .marquee-track { animation: clapi-marquee 38s linear infinite; }
+
+  @keyframes clapi-pulse { 0%,100% { opacity:1; transform:scale(1) } 50% { opacity:.35; transform:scale(.8) } }
+  .live-dot { animation: clapi-pulse 2.2s ease-in-out infinite; }
+
+  /* Indicador de scroll del hero */
+  @keyframes cue-travel { 0% { transform: translateY(-70%); opacity: 0 } 40%,60% { opacity: 1 } 100% { transform: translateY(70%); opacity: 0 } }
+  .cue-bead { animation: cue-travel 2.1s cubic-bezier(.45,0,.55,1) infinite; }
+
+  :focus-visible { outline: 2px solid #FFD500; outline-offset: 3px; border-radius: 6px; }
+
+  @media (prefers-reduced-motion: reduce) {
+    html { scroll-behavior: auto; }
+    .reveal { opacity: 1 !important; transform: none !important; }
+    .marquee-track, .live-dot, .grain, .cue-bead { animation: none !important; }
+    .grain { display: none; }
+    *, *::before, *::after {
+      animation-duration: .01ms !important; animation-iteration-count: 1 !important;
+      transition-duration: .01ms !important;
+    }
+  }
+</style>
+</head>
+
+<body class="bg-void font-sans text-muted antialiased selection:bg-accent selection:text-ink">
+
+<a href="#main" class="sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-[100] focus:rounded-lg focus:bg-accent focus:px-4 focus:py-3 focus:font-semibold focus:text-ink">
+  Saltar al contenido principal
+</a>
+
+<!-- ══════════ ESCENA 3D (fija, detrás de todo) ══════════ -->
+<div id="scene" aria-hidden="true"></div>
+
+<!-- Fondo ambiental: degradado radial oscuro con las manchas de marca.
+     -z-10 para quedar SIEMPRE detrás del canvas 3D, que ahora es transparente. -->
+<div aria-hidden="true" class="aurora-fallback pointer-events-none fixed inset-0 -z-10 overflow-hidden">
+  <div class="absolute -top-40 -left-32 h-[34rem] w-[34rem] rounded-full bg-brand/25 blur-[130px]"></div>
+  <div class="absolute top-1/3 -right-40 h-[30rem] w-[30rem] rounded-full bg-brand-deep/40 blur-[140px]"></div>
+  <div class="absolute bottom-0 left-1/3 h-[26rem] w-[26rem] rounded-full bg-accent/[.06] blur-[130px]"></div>
+</div>
+
+<div class="vignette"></div>
+<div class="grain"></div>
+
+<!-- Barra de progreso de lectura -->
+<div aria-hidden="true" class="fixed inset-x-0 top-0 z-[60] h-px bg-transparent">
+  <div id="progress-bar" class="h-full w-0 bg-linear-to-r from-brand-lite to-accent transition-[width] duration-150 ease-out"></div>
+</div>
+
+<!-- ══════════════════════════════ HEADER ══════════════════════════════ -->
+<header id="site-header" class="fixed inset-x-0 top-0 z-50 border-b border-transparent transition-colors duration-500">
+  <div class="mx-auto flex max-w-[1600px] items-center justify-between gap-4 px-5 py-4 lg:px-8">
+
+    <a href="#hero" class="group flex items-center gap-3" aria-label="CLAPI — inicio">
+      <img src="diseño/Isotipo-transparent.png" alt=""
+           class="h-9 w-9 shrink-0 transition-transform duration-500 group-hover:rotate-[-8deg]">
+      <span class="text-lg font-extrabold tracking-[.24em] text-paper">CLAPI</span>
+    </a>
+
+    <nav class="hidden items-center gap-1 lg:flex" aria-label="Navegación principal">
+      <a href="#servicios" class="nav-link rounded-lg px-4 py-2.5 font-mono text-[.7rem] tracking-[.16em] text-muted uppercase transition-colors duration-200 hover:text-paper">Servicios</a>
+      <a href="#casos"     class="nav-link rounded-lg px-4 py-2.5 font-mono text-[.7rem] tracking-[.16em] text-muted uppercase transition-colors duration-200 hover:text-paper">Casos</a>
+      <a href="#proyectos" class="nav-link rounded-lg px-4 py-2.5 font-mono text-[.7rem] tracking-[.16em] text-muted uppercase transition-colors duration-200 hover:text-paper">Proyectos</a>
+      <a href="#nosotros"  class="nav-link rounded-lg px-4 py-2.5 font-mono text-[.7rem] tracking-[.16em] text-muted uppercase transition-colors duration-200 hover:text-paper">Nosotros</a>
+      <a href="#contacto"  class="nav-link rounded-lg px-4 py-2.5 font-mono text-[.7rem] tracking-[.16em] text-muted uppercase transition-colors duration-200 hover:text-paper">Contacto</a>
+    </nav>
+
+    <div class="flex items-center gap-2">
+      <a href="logo3D.html"
+         class="group hidden cursor-pointer items-center gap-1.5 rounded-xl border border-brand-lite/35 bg-brand/10 px-4 py-3 font-mono text-[.7rem] tracking-[.14em] text-brand-lite uppercase backdrop-blur-md transition-all duration-300 hover:border-brand-lite/60 hover:bg-brand/20 lg:inline-flex">
+        <svg class="h-3.5 w-3.5 transition-transform duration-500 group-hover:rotate-[-8deg]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/></svg>
+        Isotipo 3D
+      </a>
+      <a href="#contacto"
+         class="hidden cursor-pointer rounded-xl bg-accent px-5 py-3 text-sm font-bold text-ink transition-all duration-300 hover:shadow-[0_0_30px_-4px_rgba(255,213,0,.65)] hover:brightness-105 sm:block">
+        Agendar Llamada
+      </a>
+
+      <button id="menu-btn" type="button"
+              class="inline-flex h-11 w-11 cursor-pointer items-center justify-center rounded-xl border border-line bg-surface/60 text-lav backdrop-blur-md transition-colors hover:bg-surface-2 lg:hidden"
+              aria-label="Abrir menú de navegación" aria-expanded="false" aria-controls="mobile-menu">
+        <svg id="icon-open" class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+        <svg id="icon-close" class="hidden h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
+      </button>
+    </div>
+  </div>
+
+  <div id="mobile-menu" class="hidden border-t border-line bg-void/95 backdrop-blur-xl lg:hidden">
+    <nav class="mx-auto flex max-w-[1600px] flex-col px-5 py-4" aria-label="Navegación móvil">
+      <a href="#servicios" class="rounded-lg px-3 py-3.5 font-mono text-sm tracking-[.12em] text-lav uppercase transition-colors hover:bg-surface">Servicios</a>
+      <a href="#casos"     class="rounded-lg px-3 py-3.5 font-mono text-sm tracking-[.12em] text-lav uppercase transition-colors hover:bg-surface">Casos</a>
+      <a href="#proyectos" class="rounded-lg px-3 py-3.5 font-mono text-sm tracking-[.12em] text-lav uppercase transition-colors hover:bg-surface">Proyectos</a>
+      <a href="#nosotros"  class="rounded-lg px-3 py-3.5 font-mono text-sm tracking-[.12em] text-lav uppercase transition-colors hover:bg-surface">Nosotros</a>
+      <a href="#contacto"  class="rounded-lg px-3 py-3.5 font-mono text-sm tracking-[.12em] text-lav uppercase transition-colors hover:bg-surface">Contacto</a>
+      <a href="logo3D.html" class="mt-1 flex items-center gap-2 rounded-lg border border-brand-lite/35 bg-brand/10 px-3 py-3.5 font-mono text-sm tracking-[.12em] text-brand-lite uppercase transition-colors hover:bg-brand/20">
+        <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/></svg>
+        Isotipo 3D
+      </a>
+      <a href="#contacto"  class="mt-3 rounded-xl bg-accent px-5 py-3.5 text-center text-base font-bold text-ink">Agendar Llamada</a>
+    </nav>
+  </div>
+</header>
+
+<main id="main" class="relative z-10">
+
+<!-- ══════════════════════════════ HERO ══════════════════════════════ -->
+<section id="hero" class="relative flex min-h-[100svh] flex-col justify-center overflow-hidden pt-28 pb-16 lg:pt-32">
+  <div aria-hidden="true" class="grid-tech absolute inset-0 -z-10"></div>
+
+  <div class="mx-auto w-full max-w-[1600px] px-5 lg:px-8">
+    <div class="grid items-center gap-10 lg:grid-cols-12">
+
+      <div class="lg:col-span-6 xl:col-span-5">
+        <div class="reveal flex flex-wrap items-center gap-2.5">
+          <p class="inline-flex items-center gap-2.5 rounded-full border border-line bg-surface/50 px-4 py-2 font-mono text-[.68rem] tracking-[.18em] text-lav uppercase backdrop-blur-md">
+            <span class="live-dot h-1.5 w-1.5 rounded-full bg-accent"></span>
+            Automatización con IA
+          </p>
+
+          <a href="logo3D.html"
+             class="group inline-flex cursor-pointer items-center gap-2 rounded-full border border-brand-lite/40 bg-brand/15 px-4 py-2 font-mono text-[.68rem] tracking-[.18em] text-brand-lite uppercase backdrop-blur-md transition-all duration-300 hover:border-brand-lite/70 hover:bg-brand/25">
+            <svg class="h-3.5 w-3.5 transition-transform duration-500 group-hover:rotate-[-8deg]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/></svg>
+            Nuevo · isotipo en 3D
+            <svg class="h-3.5 w-3.5 transition-transform duration-300 group-hover:translate-x-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+          </a>
+        </div>
+
+        <h1 class="reveal mt-7 text-[clamp(2.4rem,6.2vw,4.4rem)] leading-[1.04] font-extrabold tracking-[-.03em] text-paper">
+          Software a la medida
+          <span class="text-brand-lite">+ IA</span>
+          que automatiza
+          <span class="bg-linear-to-r from-accent via-lav to-brand-lite bg-clip-text text-transparent">lo que frena tu crecimiento.</span>
+        </h1>
+
+        <p class="reveal mt-7 max-w-lg text-base leading-relaxed text-muted sm:text-lg">
+          Analizamos, diseñamos y construimos sistemas inteligentes que optimizan operaciones
+          empresariales complejas. Menos tareas repetitivas, menos costos y control total
+          en tiempo real.
+        </p>
+
+        <div class="reveal mt-9 flex flex-col gap-3 sm:flex-row sm:items-center">
+          <a href="#contacto"
+             class="group inline-flex cursor-pointer items-center justify-center gap-2 rounded-xl bg-accent px-7 py-4 text-base font-bold text-ink transition-all duration-300 hover:shadow-[0_0_36px_-6px_rgba(255,213,0,.7)] hover:brightness-105">
+            Iniciar Proyecto
+            <svg class="h-4 w-4 transition-transform duration-300 group-hover:translate-x-1" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+          </a>
+          <a href="#casos"
+             class="inline-flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-line bg-surface/50 px-7 py-4 text-base font-semibold text-lav backdrop-blur-md transition-all duration-300 hover:border-brand-lite/50 hover:bg-surface-2">
+            Ver Proyectos
+          </a>
+        </div>
+
+        <dl class="reveal mt-12 grid max-w-lg grid-cols-3 gap-5 border-t border-line-soft pt-8">
+          <div>
+            <dt class="font-mono text-[.62rem] tracking-[.14em] text-muted uppercase">Tiempo ahorrado</dt>
+            <dd class="mt-2 text-2xl font-bold text-brand-lite sm:text-3xl">+68%</dd>
+          </div>
+          <div>
+            <dt class="font-mono text-[.62rem] tracking-[.14em] text-muted uppercase">Costos operativos</dt>
+            <dd class="mt-2 text-2xl font-bold text-accent sm:text-3xl">−42%</dd>
+          </div>
+          <div>
+            <dt class="font-mono text-[.62rem] tracking-[.14em] text-muted uppercase">Tareas automat.</dt>
+            <dd class="mt-2 text-2xl font-bold text-paper sm:text-3xl">128</dd>
+          </div>
+        </dl>
+      </div>
+
+      <!-- Columna derecha: espacio reservado para el prisma 3D.
+           En móvil el prisma se centra y esto solo aporta altura. -->
+      <div class="pointer-events-none order-first h-[38svh] lg:order-none lg:col-span-6 lg:col-start-7 lg:h-[70svh]" aria-hidden="true"></div>
+    </div>
+  </div>
+
+  <!-- HUD inferior: lectura en vivo de la orientación del isotipo 3D -->
+  <div class="pointer-events-none absolute inset-x-0 bottom-6 z-20 px-5 lg:px-8">
+    <div class="mx-auto flex max-w-[1600px] items-end justify-between gap-6">
+      <dl id="gizmo" class="hidden font-mono text-[.62rem] tracking-[.14em] text-muted/70 uppercase sm:block">
+        <div class="flex gap-4">
+          <span>Isotipo</span>
+          <span>rx <span data-axis="x" class="text-brand-lite/80">0.00</span></span>
+          <span>ry <span data-axis="y" class="text-brand-lite/80">0.00</span></span>
+          <span>rz <span data-axis="z" class="text-brand-lite/80">0.00</span></span>
+        </div>
+      </dl>
+
+      <a href="#servicios" class="pointer-events-auto ml-auto flex flex-col items-center gap-2" aria-label="Ir a servicios">
+        <span class="font-mono text-[.6rem] tracking-[.22em] text-muted uppercase">Scroll</span>
+        <span class="relative flex h-9 w-5 justify-center overflow-hidden rounded-full border border-line">
+          <span class="cue-bead mt-2 h-1.5 w-1 rounded-full bg-accent"></span>
+        </span>
+      </a>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════════ MARQUEE ══════════════════ -->
+<section aria-label="Tecnologías que utilizamos" class="relative border-y border-line-soft bg-void/70 py-6 backdrop-blur-sm">
+  <div class="relative overflow-hidden [mask-image:linear-gradient(to_right,transparent,#000_12%,#000_88%,transparent)]">
+    <ul class="marquee-track flex w-max items-center gap-12 pr-12 font-mono text-xs tracking-[.16em] text-muted/60 uppercase">
+      <li>OpenAI</li><li aria-hidden="true">/</li>
+      <li>Anthropic Claude</li><li aria-hidden="true">/</li>
+      <li>WhatsApp Business API</li><li aria-hidden="true">/</li>
+      <li>Python</li><li aria-hidden="true">/</li>
+      <li>Next.js</li><li aria-hidden="true">/</li>
+      <li>PostgreSQL</li><li aria-hidden="true">/</li>
+      <li>n8n</li><li aria-hidden="true">/</li>
+      <li>Google Cloud</li><li aria-hidden="true">/</li>
+      <li aria-hidden="true">OpenAI</li><li aria-hidden="true">/</li>
+      <li aria-hidden="true">Anthropic Claude</li><li aria-hidden="true">/</li>
+      <li aria-hidden="true">WhatsApp Business API</li><li aria-hidden="true">/</li>
+      <li aria-hidden="true">Python</li><li aria-hidden="true">/</li>
+      <li aria-hidden="true">Next.js</li><li aria-hidden="true">/</li>
+      <li aria-hidden="true">PostgreSQL</li><li aria-hidden="true">/</li>
+      <li aria-hidden="true">n8n</li><li aria-hidden="true">/</li>
+      <li aria-hidden="true">Google Cloud</li><li aria-hidden="true">/</li>
+    </ul>
+  </div>
+</section>
+
+<!-- ══════════════════════════════ SERVICIOS ══════════════════════════════ -->
+<section id="servicios" class="relative scroll-mt-24 bg-void/85 py-24 backdrop-blur-sm lg:py-32">
+  <div class="mx-auto max-w-[1600px] px-5 lg:px-8">
+
+    <header class="reveal max-w-2xl">
+      <p class="font-mono text-[.68rem] tracking-[.22em] text-accent uppercase">01 — Servicios</p>
+      <h2 class="mt-5 text-[clamp(1.9rem,4.2vw,3.2rem)] leading-[1.08] font-bold tracking-[-.02em] text-paper">
+        Transformamos procesos.<br>
+        <span class="text-brand-lite">Potenciamos negocios.</span>
+      </h2>
+      <p class="mt-5 text-base leading-relaxed text-muted sm:text-lg">
+        No vendemos plantillas. Estudiamos tu operación y construimos exactamente la pieza
+        de software o de IA que resuelve el cuello de botella real.
+      </p>
+    </header>
+
+    <div class="mt-14 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+
+      <article class="reveal group relative rounded-brand border border-line bg-surface/35 p-6 backdrop-blur-md transition-all duration-400 hover:-translate-y-1.5 hover:border-brand-lite/45 hover:bg-surface-2/55">
+        <div class="flex h-12 w-12 items-center justify-center rounded-xl border border-brand-lite/25 bg-brand/15 text-brand-lite transition-colors duration-300 group-hover:bg-brand/25">
+          <svg class="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <rect x="5" y="8" width="14" height="11" rx="3"/><path d="M12 5V3M9.5 13h.01M14.5 13h.01M9 16.5h6M2.5 12.5v2M21.5 12.5v2"/><circle cx="12" cy="4" r="1.2"/>
+          </svg>
+        </div>
+        <p class="mt-5 font-mono text-[.6rem] tracking-[.18em] text-muted/60 uppercase">S/01</p>
+        <h3 class="mt-2 text-lg leading-snug font-bold text-paper">Automatización de Procesos con IA</h3>
+        <p class="mt-2.5 text-sm leading-relaxed text-muted">
+          Eliminamos las tareas repetitivas que consumen a tu equipo: captura de datos,
+          validaciones, reportes y flujos internos ejecutados por agentes inteligentes.
+        </p>
+        <ul class="mt-4 flex flex-wrap gap-1.5">
+          <li class="rounded-md bg-void/70 px-2 py-1 font-mono text-[10px] tracking-wide text-muted">Agentes IA</li>
+          <li class="rounded-md bg-void/70 px-2 py-1 font-mono text-[10px] tracking-wide text-muted">RPA</li>
+          <li class="rounded-md bg-void/70 px-2 py-1 font-mono text-[10px] tracking-wide text-muted">Workflows</li>
+        </ul>
+      </article>
+
+      <article class="reveal group relative rounded-brand border border-line bg-surface/35 p-6 backdrop-blur-md transition-all duration-400 hover:-translate-y-1.5 hover:border-brand-lite/45 hover:bg-surface-2/55">
+        <div class="flex h-12 w-12 items-center justify-center rounded-xl border border-brand-lite/25 bg-brand/15 text-brand-lite transition-colors duration-300 group-hover:bg-brand/25">
+          <svg class="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <rect x="3" y="4" width="18" height="14" rx="2.5"/><path d="M7 14V11M11 14V8.5M15 14v-4M9 21h6"/>
+          </svg>
+        </div>
+        <p class="mt-5 font-mono text-[.6rem] tracking-[.18em] text-muted/60 uppercase">S/02</p>
+        <h3 class="mt-2 text-lg leading-snug font-bold text-paper">Software y Dashboards a la Medida</h3>
+        <p class="mt-2.5 text-sm leading-relaxed text-muted">
+          Sistemas construidos alrededor de tu forma de trabajar, con tableros en tiempo real
+          para que decidas con datos y no con intuición.
+        </p>
+        <ul class="mt-4 flex flex-wrap gap-1.5">
+          <li class="rounded-md bg-void/70 px-2 py-1 font-mono text-[10px] tracking-wide text-muted">Web Apps</li>
+          <li class="rounded-md bg-void/70 px-2 py-1 font-mono text-[10px] tracking-wide text-muted">BI</li>
+          <li class="rounded-md bg-void/70 px-2 py-1 font-mono text-[10px] tracking-wide text-muted">Tiempo real</li>
+        </ul>
+      </article>
+
+      <article class="reveal group relative rounded-brand border border-line bg-surface/35 p-6 backdrop-blur-md transition-all duration-400 hover:-translate-y-1.5 hover:border-brand-lite/45 hover:bg-surface-2/55">
+        <div class="flex h-12 w-12 items-center justify-center rounded-xl border border-brand-lite/25 bg-brand/15 text-brand-lite transition-colors duration-300 group-hover:bg-brand/25">
+          <svg class="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M4 13v-2a8 8 0 0 1 16 0v2"/><rect x="2.5" y="12.5" width="4" height="6.5" rx="2"/><rect x="17.5" y="12.5" width="4" height="6.5" rx="2"/><path d="M19.5 19v.5a2.5 2.5 0 0 1-2.5 2.5h-3"/>
+          </svg>
+        </div>
+        <p class="mt-5 font-mono text-[.6rem] tracking-[.18em] text-muted/60 uppercase">S/03</p>
+        <h3 class="mt-2 text-lg leading-snug font-bold text-paper">Agentes de Voz y Bots Conversacionales</h3>
+        <p class="mt-2.5 text-sm leading-relaxed text-muted">
+          Asistentes que hablan y escriben como personas: atienden llamadas, resuelven
+          consultas complejas y ejecutan acciones reales sobre tus sistemas.
+        </p>
+        <ul class="mt-4 flex flex-wrap gap-1.5">
+          <li class="rounded-md bg-void/70 px-2 py-1 font-mono text-[10px] tracking-wide text-muted">Voz IA</li>
+          <li class="rounded-md bg-void/70 px-2 py-1 font-mono text-[10px] tracking-wide text-muted">NLP</li>
+          <li class="rounded-md bg-void/70 px-2 py-1 font-mono text-[10px] tracking-wide text-muted">Chatbots</li>
+        </ul>
+      </article>
+
+      <article class="reveal group relative rounded-brand border border-line bg-surface/35 p-6 backdrop-blur-md transition-all duration-400 hover:-translate-y-1.5 hover:border-brand-lite/45 hover:bg-surface-2/55">
+        <div class="flex h-12 w-12 items-center justify-center rounded-xl border border-brand-lite/25 bg-brand/15 text-brand-lite transition-colors duration-300 group-hover:bg-brand/25">
+          <svg class="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M7 18a4 4 0 0 1-.7-7.94 5.5 5.5 0 0 1 10.6-1.1A3.9 3.9 0 0 1 20.5 13 3.6 3.6 0 0 1 17 18z"/><path d="M12 12v7M9.2 16.2 12 19l2.8-2.8"/>
+          </svg>
+        </div>
+        <p class="mt-5 font-mono text-[.6rem] tracking-[.18em] text-muted/60 uppercase">S/04</p>
+        <h3 class="mt-2 text-lg leading-snug font-bold text-paper">Integraciones en la Nube y WhatsApp</h3>
+        <p class="mt-2.5 text-sm leading-relaxed text-muted">
+          Conectamos tus herramientas, tu base de datos y WhatsApp en un solo flujo, accesible
+          desde cualquier lugar con un celular e internet.
+        </p>
+        <ul class="mt-4 flex flex-wrap gap-1.5">
+          <li class="rounded-md bg-void/70 px-2 py-1 font-mono text-[10px] tracking-wide text-muted">APIs</li>
+          <li class="rounded-md bg-void/70 px-2 py-1 font-mono text-[10px] tracking-wide text-muted">Cloud</li>
+          <li class="rounded-md bg-void/70 px-2 py-1 font-mono text-[10px] tracking-wide text-muted">WhatsApp API</li>
+        </ul>
+      </article>
+    </div>
+
+    <!-- Proceso 01–04 -->
+    <div class="reveal mt-5 grid gap-px overflow-hidden rounded-brand border border-line bg-line sm:grid-cols-2 lg:grid-cols-4">
+      <div class="bg-surface/55 p-6 backdrop-blur-md">
+        <p class="font-mono text-2xl font-medium text-accent">01</p>
+        <p class="mt-2 text-base font-semibold text-paper">Entendemos</p>
+        <p class="mt-1 text-sm leading-relaxed text-muted">Mapeamos tu operación y el cuello de botella real.</p>
+      </div>
+      <div class="bg-surface/55 p-6 backdrop-blur-md">
+        <p class="font-mono text-2xl font-medium text-accent">02</p>
+        <p class="mt-2 text-base font-semibold text-paper">Diseñamos</p>
+        <p class="mt-1 text-sm leading-relaxed text-muted">Definimos la solución, el alcance y los entregables.</p>
+      </div>
+      <div class="bg-surface/55 p-6 backdrop-blur-md">
+        <p class="font-mono text-2xl font-medium text-accent">03</p>
+        <p class="mt-2 text-base font-semibold text-paper">Construimos</p>
+        <p class="mt-1 text-sm leading-relaxed text-muted">Desarrollamos e integramos con entregas continuas.</p>
+      </div>
+      <div class="bg-surface/55 p-6 backdrop-blur-md">
+        <p class="font-mono text-2xl font-medium text-accent">04</p>
+        <p class="mt-2 text-base font-semibold text-paper">Optimizamos</p>
+        <p class="mt-1 text-sm leading-relaxed text-muted">Medimos el impacto y afinamos sobre resultados.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════════════════════ CASOS DE ÉXITO ══════════════════════════════ -->
+<section id="casos" class="relative scroll-mt-24 border-y border-line-soft bg-void/80 py-24 backdrop-blur-sm lg:py-32">
+  <div class="mx-auto max-w-[1600px] px-5 lg:px-8">
+
+    <header class="reveal max-w-2xl">
+      <p class="font-mono text-[.68rem] tracking-[.22em] text-accent uppercase">02 — Casos de Éxito</p>
+      <h2 class="mt-5 text-[clamp(1.9rem,4.2vw,3.2rem)] leading-[1.08] font-bold tracking-[-.02em] text-paper">
+        Sistemas reales, <span class="text-brand-lite">operando hoy</span>.
+      </h2>
+      <p class="mt-5 text-base leading-relaxed text-muted sm:text-lg">
+        Estos son los proyectos que mejor resumen cómo trabajamos: problemas concretos,
+        automatización de punta a punta y resultados medibles.
+      </p>
+    </header>
+
+    <!-- Caso 1: BGC -->
+    <article class="reveal ring-gradient mt-14 overflow-hidden rounded-brand border border-line bg-surface/45 backdrop-blur-xl">
+      <div class="grid lg:grid-cols-2">
+        <div class="order-2 p-7 sm:p-10 lg:order-1 lg:p-12">
+          <div class="flex flex-wrap items-center gap-2.5">
+            <span class="inline-flex items-center gap-1.5 rounded-full border border-accent/35 bg-accent/10 px-3 py-1.5 font-mono text-[10px] tracking-[.14em] text-accent uppercase">
+              <span class="live-dot h-1.5 w-1.5 rounded-full bg-accent"></span> En producción
+            </span>
+            <span class="rounded-full border border-line bg-void/60 px-3 py-1.5 font-mono text-[10px] tracking-[.14em] text-muted uppercase">Fintech · Préstamos</span>
+          </div>
+
+          <h3 class="mt-5 text-[clamp(1.5rem,2.6vw,2rem)] leading-tight font-bold tracking-[-.02em] text-paper">
+            Sistema Contable IA para BGC
+          </h3>
+          <p class="mt-4 text-base leading-relaxed text-muted">
+            Contabilidad automatizada para una cooperativa familiar de préstamos. El equipo
+            registra operaciones hablando o escribiendo, y el sistema hace el resto: guarda,
+            concilia, imprime y despacha al socio.
+          </p>
+
+          <ul class="mt-7 space-y-4">
+            <li class="flex gap-3.5">
+              <span class="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-brand/20 text-brand-lite">
+                <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12.5 9.5 18 20 6.5"/></svg>
+              </span>
+              <p class="text-sm leading-relaxed text-lav">
+                <span class="font-semibold text-paper">Registro por nota de voz o texto.</span>
+                Un asistente de IA interpreta la operación contable y la estructura sin formularios.
+              </p>
+            </li>
+            <li class="flex gap-3.5">
+              <span class="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-brand/20 text-brand-lite">
+                <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12.5 9.5 18 20 6.5"/></svg>
+              </span>
+              <p class="text-sm leading-relaxed text-lav">
+                <span class="font-semibold text-paper">Guardado automático en base de datos.</span>
+                La contabilidad queda al día en el momento, sin digitación posterior.
+              </p>
+            </li>
+            <li class="flex gap-3.5">
+              <span class="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-brand/20 text-brand-lite">
+                <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12.5 9.5 18 20 6.5"/></svg>
+              </span>
+              <p class="text-sm leading-relaxed text-lav">
+                <span class="font-semibold text-paper">Recibo generado, impreso y enviado.</span>
+                Se emite solo, sale a impresión de inmediato y llega al socio por WhatsApp.
+              </p>
+            </li>
+            <li class="flex gap-3.5">
+              <span class="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-brand/20 text-brand-lite">
+                <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12.5 9.5 18 20 6.5"/></svg>
+              </span>
+              <p class="text-sm leading-relaxed text-lav">
+                <span class="font-semibold text-paper">Libro auxiliar y dashboard en tiempo real.</span>
+                Software contable integrado con la posición actualizada de cada socio.
+              </p>
+            </li>
+            <li class="flex gap-3.5">
+              <span class="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-brand/20 text-brand-lite">
+                <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12.5 9.5 18 20 6.5"/></svg>
+              </span>
+              <p class="text-sm leading-relaxed text-lav">
+                <span class="font-semibold text-paper">100% en la nube.</span>
+                Accesible desde cualquier lugar con un celular e internet.
+              </p>
+            </li>
+          </ul>
+
+          <ul class="mt-8 flex flex-wrap gap-2 border-t border-line-soft pt-6">
+            <li class="rounded-lg border border-line bg-void/60 px-2.5 py-1.5 font-mono text-[10px] tracking-wide text-muted">IA de voz</li>
+            <li class="rounded-lg border border-line bg-void/60 px-2.5 py-1.5 font-mono text-[10px] tracking-wide text-muted">WhatsApp API</li>
+            <li class="rounded-lg border border-line bg-void/60 px-2.5 py-1.5 font-mono text-[10px] tracking-wide text-muted">PostgreSQL</li>
+            <li class="rounded-lg border border-line bg-void/60 px-2.5 py-1.5 font-mono text-[10px] tracking-wide text-muted">Dashboard</li>
+            <li class="rounded-lg border border-line bg-void/60 px-2.5 py-1.5 font-mono text-[10px] tracking-wide text-muted">Cloud</li>
+          </ul>
+        </div>
+
+        <div class="order-1 border-b border-line bg-linear-to-br from-brand/18 via-void to-void p-5 sm:p-8 lg:order-2 lg:border-b-0 lg:border-l">
+          <figure class="h-full">
+            <div class="media-slot group relative flex h-full min-h-[280px] items-center justify-center overflow-hidden rounded-2xl border border-line bg-void/70 sm:min-h-[380px]">
+              <img src="diseño/bgc-mockup.png"
+                   alt="Dashboard del sistema contable con IA desarrollado para BGC, mostrando el libro auxiliar y los indicadores en tiempo real."
+                   loading="lazy" decoding="async" width="1200" height="800"
+                   class="h-full w-full object-cover transition-transform duration-700 group-hover:scale-[1.04]">
+              <div class="slot-fallback absolute inset-0 -z-10 flex flex-col items-center justify-center gap-3 p-6 text-center">
+                <svg class="h-10 w-10 text-brand-lite/55" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="14" rx="2.5"/><path d="M7 14V11M11 14V8.5M15 14v-4M9 21h6"/></svg>
+                <p class="font-mono text-xs text-lav">diseño/bgc-mockup.png</p>
+                <p class="text-xs text-muted">Coloca aquí el mockup del dashboard</p>
+              </div>
+            </div>
+            <figcaption class="mt-3 font-mono text-[10px] tracking-[.14em] text-muted uppercase">Dashboard contable en tiempo real · BGC</figcaption>
+          </figure>
+        </div>
+      </div>
+    </article>
+
+    <!-- Caso 2: Agente de voz -->
+    <article class="reveal ring-gradient mt-6 overflow-hidden rounded-brand border border-line bg-surface/45 backdrop-blur-xl">
+      <div class="grid lg:grid-cols-2">
+        <div class="border-b border-line bg-linear-to-bl from-accent/10 via-void to-void p-5 sm:p-8 lg:border-b-0 lg:border-r">
+          <figure class="h-full">
+            <div class="media-slot group relative flex h-full min-h-[280px] items-center justify-center overflow-hidden rounded-2xl border border-line bg-void/70 sm:min-h-[380px]">
+              <img src="diseño/voice-agent.png"
+                   alt="Interfaz del agente telefónico ultra-realista con inteligencia artificial en desarrollo por CLAPI."
+                   loading="lazy" decoding="async" width="1200" height="800"
+                   class="h-full w-full object-cover transition-transform duration-700 group-hover:scale-[1.04]">
+              <div class="slot-fallback absolute inset-0 -z-10 flex flex-col items-center justify-center gap-3 p-6 text-center">
+                <svg class="h-10 w-10 text-accent/55" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 13v-2a8 8 0 0 1 16 0v2"/><rect x="2.5" y="12.5" width="4" height="6.5" rx="2"/><rect x="17.5" y="12.5" width="4" height="6.5" rx="2"/></svg>
+                <p class="font-mono text-xs text-lav">diseño/voice-agent.png</p>
+                <p class="text-xs text-muted">Coloca aquí el visual del agente de voz</p>
+              </div>
+            </div>
+            <figcaption class="mt-3 font-mono text-[10px] tracking-[.14em] text-muted uppercase">Agente telefónico con IA · en desarrollo</figcaption>
+          </figure>
+        </div>
+
+        <div class="p-7 sm:p-10 lg:p-12">
+          <div class="flex flex-wrap items-center gap-2.5">
+            <span class="inline-flex items-center gap-1.5 rounded-full border border-brand-lite/40 bg-brand/15 px-3 py-1.5 font-mono text-[10px] tracking-[.14em] text-brand-lite uppercase">
+              <span class="live-dot h-1.5 w-1.5 rounded-full bg-brand-lite"></span> En desarrollo
+            </span>
+            <span class="rounded-full border border-line bg-void/60 px-3 py-1.5 font-mono text-[10px] tracking-[.14em] text-muted uppercase">Voz · Tiempo real</span>
+          </div>
+
+          <h3 class="mt-5 text-[clamp(1.5rem,2.6vw,2rem)] leading-tight font-bold tracking-[-.02em] text-paper">
+            Agente Telefónico Ultra-Realista con IA
+          </h3>
+          <p class="mt-4 text-base leading-relaxed text-muted">
+            Un agente de voz humanizado, capaz de realizar y atender llamadas telefónicas en
+            tiempo real, sostener una conversación natural, responder consultas complejas y
+            ejecutar acciones operativas sobre los sistemas de la empresa.
+          </p>
+
+          <div class="mt-7 grid gap-3 sm:grid-cols-2">
+            <div class="rounded-xl border border-line-soft bg-void/50 p-4">
+              <p class="text-sm font-semibold text-paper">Voz natural</p>
+              <p class="mt-1 text-xs leading-relaxed text-muted">Entonación y ritmo humanos, con latencia conversacional.</p>
+            </div>
+            <div class="rounded-xl border border-line-soft bg-void/50 p-4">
+              <p class="text-sm font-semibold text-paper">Llamadas bidireccionales</p>
+              <p class="mt-1 text-xs leading-relaxed text-muted">Realiza y recibe llamadas sin intervención humana.</p>
+            </div>
+            <div class="rounded-xl border border-line-soft bg-void/50 p-4">
+              <p class="text-sm font-semibold text-paper">Consultas complejas</p>
+              <p class="mt-1 text-xs leading-relaxed text-muted">Consulta datos reales y responde con contexto del negocio.</p>
+            </div>
+            <div class="rounded-xl border border-line-soft bg-void/50 p-4">
+              <p class="text-sm font-semibold text-paper">Acciones operativas</p>
+              <p class="mt-1 text-xs leading-relaxed text-muted">Agenda, registra y actualiza durante la misma llamada.</p>
+            </div>
+          </div>
+
+          <ul class="mt-8 flex flex-wrap gap-2 border-t border-line-soft pt-6">
+            <li class="rounded-lg border border-line bg-void/60 px-2.5 py-1.5 font-mono text-[10px] tracking-wide text-muted">Speech-to-Speech</li>
+            <li class="rounded-lg border border-line bg-void/60 px-2.5 py-1.5 font-mono text-[10px] tracking-wide text-muted">Telefonía VoIP</li>
+            <li class="rounded-lg border border-line bg-void/60 px-2.5 py-1.5 font-mono text-[10px] tracking-wide text-muted">LLM</li>
+            <li class="rounded-lg border border-line bg-void/60 px-2.5 py-1.5 font-mono text-[10px] tracking-wide text-muted">Function calling</li>
+          </ul>
+        </div>
+      </div>
+    </article>
+  </div>
+</section>
+
+<!-- ══════════════════════════════ PROYECTOS ══════════════════════════════ -->
+<section id="proyectos" class="relative scroll-mt-24 bg-void/85 py-24 backdrop-blur-sm lg:py-32">
+  <div class="mx-auto max-w-[1600px] px-5 lg:px-8">
+
+    <header class="reveal flex flex-col gap-6 sm:flex-row sm:items-end sm:justify-between">
+      <div class="max-w-2xl">
+        <p class="font-mono text-[.68rem] tracking-[.22em] text-accent uppercase">03 — Portafolio</p>
+        <h2 class="mt-5 text-[clamp(1.9rem,4.2vw,3.2rem)] leading-[1.08] font-bold tracking-[-.02em] text-paper">
+          Lo que viene <span class="text-brand-lite">a continuación</span>.
+        </h2>
+        <p class="mt-5 text-base leading-relaxed text-muted sm:text-lg">
+          Espacios reservados para los próximos sistemas que estamos construyendo.
+          Este portafolio crece con cada entrega.
+        </p>
+      </div>
+      <a href="#contacto" class="inline-flex shrink-0 cursor-pointer items-center gap-2 rounded-xl border border-line bg-surface/50 px-5 py-3.5 text-sm font-semibold text-lav backdrop-blur-md transition-all duration-300 hover:border-accent/50 hover:bg-surface-2">
+        ¿Tu proyecto es el siguiente?
+        <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+      </a>
+    </header>
+
+    <ul id="project-grid" class="mt-14 grid gap-5 sm:grid-cols-2 lg:grid-cols-4"></ul>
+  </div>
+</section>
+
+<!-- ══════════════════════════════ NOSOTROS ══════════════════════════════ -->
+<section id="nosotros" class="relative scroll-mt-24 border-y border-line-soft bg-void/80 py-24 backdrop-blur-sm lg:py-32">
+  <div class="mx-auto max-w-[1600px] px-5 lg:px-8">
+    <div class="grid items-center gap-12 lg:grid-cols-12 lg:gap-14">
+
+      <div class="reveal lg:col-span-7">
+        <figure class="ring-gradient relative overflow-hidden rounded-brand border border-line bg-surface/45 p-3 backdrop-blur-xl">
+          <div class="media-slot relative flex aspect-4/3 items-center justify-center overflow-hidden rounded-2xl bg-void/70 sm:aspect-16/10">
+            <img src="diseño/equipo-clapi.jpg"
+                 alt="Los tres integrantes del equipo de CLAPI."
+                 loading="lazy" decoding="async" width="1600" height="1000"
+                 class="h-full w-full object-cover">
+            <div class="slot-fallback absolute inset-0 -z-10 flex flex-col items-center justify-center gap-3 p-6 text-center">
+              <svg class="h-11 w-11 text-brand-lite/50" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <circle cx="12" cy="8" r="3.2"/><circle cx="4.8" cy="10" r="2.4"/><circle cx="19.2" cy="10" r="2.4"/>
+                <path d="M6.5 19a5.5 5.5 0 0 1 11 0M1.5 17.5a3.8 3.8 0 0 1 4.2-3.3M22.5 17.5a3.8 3.8 0 0 0-4.2-3.3"/>
+              </svg>
+              <p class="font-mono text-xs text-lav">diseño/equipo-clapi.jpg</p>
+              <p class="text-xs text-muted">Foto grupal de los 3 integrantes</p>
+            </div>
+          </div>
+          <figcaption class="px-2 pt-3 pb-1 font-mono text-[10px] tracking-[.14em] text-muted uppercase">El equipo CLAPI</figcaption>
+        </figure>
+      </div>
+
+      <div class="reveal lg:col-span-5">
+        <p class="font-mono text-[.68rem] tracking-[.22em] text-accent uppercase">04 — Nosotros</p>
+        <h2 class="mt-5 text-[clamp(1.9rem,4.2vw,3.2rem)] leading-[1.08] font-bold tracking-[-.02em] text-paper">
+          Tres personas.<br>
+          <span class="text-brand-lite">Un estándar muy alto.</span>
+        </h2>
+        <p class="mt-6 text-base leading-relaxed text-muted sm:text-lg">
+          Somos un equipo de tres: jóvenes expertos en transformar ideas complejas en código
+          e inteligencia artificial que resuelve problemas reales. Trabajamos cerca del
+          cliente, entregamos rápido y respondemos por lo que construimos.
+        </p>
+        <p class="mt-4 text-base leading-relaxed text-muted sm:text-lg">
+          Usamos la tecnología para liberar el potencial de las personas y las empresas.
+        </p>
+
+        <dl class="mt-9 grid grid-cols-3 gap-4 border-t border-line-soft pt-8">
+          <div>
+            <dt class="font-mono text-[.62rem] tracking-[.14em] text-muted uppercase">Integrantes</dt>
+            <dd class="mt-2 text-2xl font-bold text-paper">3</dd>
+          </div>
+          <div>
+            <dt class="font-mono text-[.62rem] tracking-[.14em] text-muted uppercase">Enfoque</dt>
+            <dd class="mt-2 text-2xl font-bold text-paper">IA</dd>
+          </div>
+          <div>
+            <dt class="font-mono text-[.62rem] tracking-[.14em] text-muted uppercase">Entregas</dt>
+            <dd class="mt-2 text-2xl font-bold text-paper">Ágiles</dd>
+          </div>
+        </dl>
+
+        <div class="mt-9 flex flex-col gap-3 sm:flex-row sm:items-center">
+          <a href="#contacto" class="inline-flex cursor-pointer items-center gap-2 rounded-xl bg-accent px-6 py-3.5 text-sm font-bold text-ink transition-all duration-300 hover:shadow-[0_0_30px_-6px_rgba(255,213,0,.65)] hover:brightness-105">
+            Hablemos de tu proyecto
+            <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+          </a>
+          <a href="logo3D.html" class="group inline-flex cursor-pointer items-center gap-2 rounded-xl border border-line bg-surface/50 px-6 py-3.5 text-sm font-semibold text-lav backdrop-blur-md transition-all duration-300 hover:border-brand-lite/50 hover:bg-surface-2">
+            <svg class="h-4 w-4 text-brand-lite transition-transform duration-500 group-hover:rotate-[-8deg]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/></svg>
+            Ver isotipo en 3D
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════════════════════ CONTACTO ══════════════════════════════ -->
+<section id="contacto" class="relative scroll-mt-24 bg-void/85 py-24 backdrop-blur-sm lg:py-32">
+  <div class="mx-auto max-w-[1600px] px-5 lg:px-8">
+    <div class="ring-gradient overflow-hidden rounded-brand border border-line bg-surface/40 backdrop-blur-xl">
+      <div class="grid lg:grid-cols-2">
+
+        <div class="reveal border-b border-line bg-linear-to-br from-brand/18 via-transparent to-transparent p-7 sm:p-10 lg:border-r lg:border-b-0 lg:p-12">
+          <p class="font-mono text-[.68rem] tracking-[.22em] text-accent uppercase">05 — Contacto</p>
+          <h2 class="mt-5 text-[clamp(1.8rem,3.4vw,2.6rem)] leading-[1.1] font-bold tracking-[-.02em] text-paper">
+            Cuéntanos qué te está<br>
+            <span class="text-brand-lite">frenando</span>. Lo automatizamos.
+          </h2>
+          <p class="mt-5 text-base leading-relaxed text-muted">
+            Agenda una llamada de diagnóstico sin costo. En 30 minutos identificamos el proceso
+            con mayor potencial de automatización en tu operación.
+          </p>
+
+          <ul class="mt-9 space-y-3">
+            <li>
+              <a href="https://wa.me/573001234567" target="_blank" rel="noopener noreferrer"
+                 class="group flex cursor-pointer items-center gap-4 rounded-xl border border-line bg-void/50 px-4 py-4 transition-all duration-300 hover:border-accent/45 hover:bg-void/80">
+                <span class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-accent/12 text-accent">
+                  <svg class="h-5 w-5" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12.04 2C6.6 2 2.2 6.4 2.2 11.84c0 1.74.46 3.43 1.32 4.92L2.05 22l5.38-1.41a9.8 9.8 0 0 0 4.61 1.17h.01c5.43 0 9.84-4.4 9.84-9.84S17.47 2 12.04 2m0 17.99h-.01a8.2 8.2 0 0 1-4.15-1.13l-.3-.18-3.08.81.82-3-.19-.31a8.13 8.13 0 0 1-1.25-4.34c0-4.5 3.67-8.16 8.17-8.16 2.18 0 4.23.85 5.77 2.39a8.11 8.11 0 0 1 2.39 5.78c0 4.5-3.67 8.16-8.17 8.16m4.48-6.11c-.25-.13-1.45-.72-1.68-.8s-.39-.12-.55.12-.63.8-.77.96-.28.19-.53.06a6.7 6.7 0 0 1-1.97-1.21 7.4 7.4 0 0 1-1.36-1.7c-.14-.24 0-.37.11-.5s.25-.28.37-.43.16-.24.25-.4.04-.31-.02-.43-.55-1.33-.76-1.82c-.2-.48-.4-.41-.55-.42h-.47a.9.9 0 0 0-.65.3 2.74 2.74 0 0 0-.86 2.04c0 1.2.88 2.37 1 2.53s1.73 2.65 4.2 3.71c.59.26 1.04.4 1.4.52.59.19 1.12.16 1.55.1.47-.07 1.45-.6 1.66-1.17s.21-1.07.14-1.17-.22-.18-.47-.3"/></svg>
+                </span>
+                <span class="min-w-0">
+                  <span class="block text-sm font-semibold text-paper">WhatsApp</span>
+                  <span class="block truncate font-mono text-xs text-muted">+57 300 123 4567</span>
+                </span>
+                <svg class="ml-auto h-4 w-4 shrink-0 text-muted transition-transform duration-300 group-hover:translate-x-1" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+              </a>
+            </li>
+            <li>
+              <a href="mailto:hola@clapi.tech"
+                 class="group flex cursor-pointer items-center gap-4 rounded-xl border border-line bg-void/50 px-4 py-4 transition-all duration-300 hover:border-brand-lite/45 hover:bg-void/80">
+                <span class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-brand/18 text-brand-lite">
+                  <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2.5" y="5" width="19" height="14" rx="2.5"/><path d="m3.5 7 8.5 6 8.5-6"/></svg>
+                </span>
+                <span class="min-w-0">
+                  <span class="block text-sm font-semibold text-paper">Correo</span>
+                  <span class="block truncate font-mono text-xs text-muted">hola@clapi.tech</span>
+                </span>
+                <svg class="ml-auto h-4 w-4 shrink-0 text-muted transition-transform duration-300 group-hover:translate-x-1" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+              </a>
+            </li>
+            <li>
+              <a href="https://www.clapi.tech" target="_blank" rel="noopener noreferrer"
+                 class="group flex cursor-pointer items-center gap-4 rounded-xl border border-line bg-void/50 px-4 py-4 transition-all duration-300 hover:border-brand-lite/45 hover:bg-void/80">
+                <span class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-brand/18 text-brand-lite">
+                  <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a15 15 0 0 1 0 18 15 15 0 0 1 0-18"/></svg>
+                </span>
+                <span class="min-w-0">
+                  <span class="block text-sm font-semibold text-paper">Sitio web</span>
+                  <span class="block truncate font-mono text-xs text-muted">www.clapi.tech</span>
+                </span>
+                <svg class="ml-auto h-4 w-4 shrink-0 text-muted transition-transform duration-300 group-hover:translate-x-1" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+              </a>
+            </li>
+          </ul>
+        </div>
+
+        <div class="reveal p-7 sm:p-10 lg:p-12">
+          <h3 class="text-xl font-bold text-paper">Iniciar un proyecto</h3>
+          <p class="mt-2 text-sm text-muted">Respondemos el mismo día hábil.</p>
+
+          <form id="contact-form" class="mt-7 space-y-5" novalidate>
+            <div>
+              <label for="nombre" class="block font-mono text-[.68rem] tracking-[.14em] text-lav uppercase">Nombre completo</label>
+              <input id="nombre" name="nombre" type="text" autocomplete="name" required
+                     class="mt-2.5 w-full rounded-xl border border-line bg-void/60 px-4 py-3.5 text-base text-paper placeholder-muted/50 transition-colors duration-200 outline-none focus:border-brand-lite"
+                     placeholder="Ej. Juan Camilo R.">
+              <p class="error-msg mt-1.5 hidden text-xs font-medium text-accent"></p>
+            </div>
+
+            <div class="grid gap-5 sm:grid-cols-2">
+              <div>
+                <label for="email" class="block font-mono text-[.68rem] tracking-[.14em] text-lav uppercase">Correo</label>
+                <input id="email" name="email" type="email" autocomplete="email" required
+                       class="mt-2.5 w-full rounded-xl border border-line bg-void/60 px-4 py-3.5 text-base text-paper placeholder-muted/50 transition-colors duration-200 outline-none focus:border-brand-lite"
+                       placeholder="tu@empresa.com">
+                <p class="error-msg mt-1.5 hidden text-xs font-medium text-accent"></p>
+              </div>
+              <div>
+                <label for="empresa" class="block font-mono text-[.68rem] tracking-[.14em] text-lav uppercase">Empresa <span class="text-muted normal-case">(opcional)</span></label>
+                <input id="empresa" name="empresa" type="text" autocomplete="organization"
+                       class="mt-2.5 w-full rounded-xl border border-line bg-void/60 px-4 py-3.5 text-base text-paper placeholder-muted/50 transition-colors duration-200 outline-none focus:border-brand-lite"
+                       placeholder="Nombre de tu empresa">
+              </div>
+            </div>
+
+            <div>
+              <label for="tipo" class="block font-mono text-[.68rem] tracking-[.14em] text-lav uppercase">¿Qué necesitas?</label>
+              <select id="tipo" name="tipo"
+                      class="mt-2.5 w-full cursor-pointer rounded-xl border border-line bg-void/60 px-4 py-3.5 text-base text-paper transition-colors duration-200 outline-none focus:border-brand-lite">
+                <option>Automatización de procesos con IA</option>
+                <option>Software o dashboard a la medida</option>
+                <option>Agente de voz o bot conversacional</option>
+                <option>Integraciones en la nube / WhatsApp</option>
+                <option>Aún no lo tengo claro</option>
+              </select>
+            </div>
+
+            <div>
+              <label for="mensaje" class="block font-mono text-[.68rem] tracking-[.14em] text-lav uppercase">Cuéntanos brevemente</label>
+              <textarea id="mensaje" name="mensaje" rows="4" required
+                        class="mt-2.5 w-full resize-y rounded-xl border border-line bg-void/60 px-4 py-3.5 text-base text-paper placeholder-muted/50 transition-colors duration-200 outline-none focus:border-brand-lite"
+                        placeholder="¿Qué proceso te está costando más tiempo hoy?"></textarea>
+              <p class="error-msg mt-1.5 hidden text-xs font-medium text-accent"></p>
+            </div>
+
+            <button type="submit"
+                    class="w-full cursor-pointer rounded-xl bg-accent px-6 py-4 text-base font-bold text-ink transition-all duration-300 hover:shadow-[0_0_34px_-6px_rgba(255,213,0,.7)] hover:brightness-105">
+              Enviar por WhatsApp
+            </button>
+
+            <p id="form-status" role="status" aria-live="polite" class="text-center text-sm text-brand-lite"></p>
+            <p class="text-center text-xs leading-relaxed text-muted">
+              Al enviar se abrirá WhatsApp con tu mensaje listo. No compartimos tus datos con terceros.
+            </p>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<!-- ══════════════════════════════ FOOTER ══════════════════════════════ -->
+<footer class="relative z-10 border-t border-line bg-void">
+  <div class="mx-auto max-w-[1600px] px-5 py-14 lg:px-8">
+    <div class="grid gap-10 sm:grid-cols-2 lg:grid-cols-4">
+
+      <div class="sm:col-span-2">
+        <a href="#hero" class="flex items-center gap-3" aria-label="CLAPI — inicio">
+          <img src="diseño/Isotipo-transparent.png" alt="" class="h-8 w-8">
+          <span class="text-lg font-extrabold tracking-[.24em] text-paper">CLAPI</span>
+        </a>
+        <p class="mt-4 max-w-sm text-sm leading-relaxed text-muted">
+          Automatizamos lo que hace <span class="font-semibold text-accent">crecer</span> tu negocio.
+          Software a la medida e inteligencia artificial para operaciones que no pueden detenerse.
+        </p>
+
+        <ul class="mt-6 flex items-center gap-2.5">
+          <li>
+            <a href="https://wa.me/573001234567" target="_blank" rel="noopener noreferrer" aria-label="Escríbenos por WhatsApp"
+               class="flex h-11 w-11 cursor-pointer items-center justify-center rounded-xl border border-line bg-surface/50 text-muted transition-all duration-300 hover:border-accent/45 hover:text-accent">
+              <svg class="h-4.5 w-4.5" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12.04 2C6.6 2 2.2 6.4 2.2 11.84c0 1.74.46 3.43 1.32 4.92L2.05 22l5.38-1.41a9.8 9.8 0 0 0 4.61 1.17h.01c5.43 0 9.84-4.4 9.84-9.84S17.47 2 12.04 2m0 17.99h-.01a8.2 8.2 0 0 1-4.15-1.13l-.3-.18-3.08.81.82-3-.19-.31a8.13 8.13 0 0 1-1.25-4.34c0-4.5 3.67-8.16 8.17-8.16 2.18 0 4.23.85 5.77 2.39a8.11 8.11 0 0 1 2.39 5.78c0 4.5-3.67 8.16-8.17 8.16m4.48-6.11c-.25-.13-1.45-.72-1.68-.8s-.39-.12-.55.12-.63.8-.77.96-.28.19-.53.06a6.7 6.7 0 0 1-1.97-1.21 7.4 7.4 0 0 1-1.36-1.7c-.14-.24 0-.37.11-.5s.25-.28.37-.43.16-.24.25-.4.04-.31-.02-.43-.55-1.33-.76-1.82c-.2-.48-.4-.41-.55-.42h-.47a.9.9 0 0 0-.65.3 2.74 2.74 0 0 0-.86 2.04c0 1.2.88 2.37 1 2.53s1.73 2.65 4.2 3.71c.59.26 1.04.4 1.4.52.59.19 1.12.16 1.55.1.47-.07 1.45-.6 1.66-1.17s.21-1.07.14-1.17-.22-.18-.47-.3"/></svg>
+            </a>
+          </li>
+          <li>
+            <a href="https://www.linkedin.com/company/clapi" target="_blank" rel="noopener noreferrer" aria-label="CLAPI en LinkedIn"
+               class="flex h-11 w-11 cursor-pointer items-center justify-center rounded-xl border border-line bg-surface/50 text-muted transition-all duration-300 hover:border-brand-lite/45 hover:text-brand-lite">
+              <svg class="h-4.5 w-4.5" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M4.98 3.5a2.5 2.5 0 1 1 0 5 2.5 2.5 0 0 1 0-5M3 9h4v12H3zM9.5 9h3.8v1.7h.05a4.2 4.2 0 0 1 3.75-2c4 0 4.75 2.6 4.75 6V21h-4v-5.3c0-1.27-.03-2.9-1.8-2.9s-2.05 1.38-2.05 2.8V21h-4z"/></svg>
+            </a>
+          </li>
+          <li>
+            <a href="https://www.instagram.com/clapi" target="_blank" rel="noopener noreferrer" aria-label="CLAPI en Instagram"
+               class="flex h-11 w-11 cursor-pointer items-center justify-center rounded-xl border border-line bg-surface/50 text-muted transition-all duration-300 hover:border-brand-lite/45 hover:text-brand-lite">
+              <svg class="h-4.5 w-4.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.3" cy="6.7" r="1.1" fill="currentColor" stroke="none"/></svg>
+            </a>
+          </li>
+          <li>
+            <a href="mailto:hola@clapi.tech" aria-label="Escríbenos por correo"
+               class="flex h-11 w-11 cursor-pointer items-center justify-center rounded-xl border border-line bg-surface/50 text-muted transition-all duration-300 hover:border-brand-lite/45 hover:text-brand-lite">
+              <svg class="h-4.5 w-4.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2.5" y="5" width="19" height="14" rx="2.5"/><path d="m3.5 7 8.5 6 8.5-6"/></svg>
+            </a>
+          </li>
+        </ul>
+      </div>
+
+      <nav aria-labelledby="foot-nav">
+        <h2 id="foot-nav" class="font-mono text-[.68rem] tracking-[.2em] text-paper uppercase">Navegación</h2>
+        <ul class="mt-4 space-y-2.5">
+          <li><a href="#servicios" class="text-sm text-muted transition-colors hover:text-accent">Servicios</a></li>
+          <li><a href="#casos"     class="text-sm text-muted transition-colors hover:text-accent">Casos de Éxito</a></li>
+          <li><a href="#proyectos" class="text-sm text-muted transition-colors hover:text-accent">Proyectos</a></li>
+          <li><a href="#nosotros"  class="text-sm text-muted transition-colors hover:text-accent">Nosotros</a></li>
+          <li><a href="#contacto"  class="text-sm text-muted transition-colors hover:text-accent">Contacto</a></li>
+        </ul>
+      </nav>
+
+      <nav aria-labelledby="foot-serv">
+        <h2 id="foot-serv" class="font-mono text-[.68rem] tracking-[.2em] text-paper uppercase">Qué hacemos</h2>
+        <ul class="mt-4 space-y-2.5">
+          <li><a href="#servicios" class="text-sm text-muted transition-colors hover:text-accent">Automatización con IA</a></li>
+          <li><a href="#servicios" class="text-sm text-muted transition-colors hover:text-accent">Software a la medida</a></li>
+          <li><a href="#servicios" class="text-sm text-muted transition-colors hover:text-accent">Agentes de voz</a></li>
+          <li><a href="#servicios" class="text-sm text-muted transition-colors hover:text-accent">Integraciones y WhatsApp</a></li>
+        </ul>
+      </nav>
+    </div>
+
+    <div class="mt-12 flex flex-col gap-4 border-t border-line-soft pt-7 sm:flex-row sm:items-center sm:justify-between">
+      <p class="font-mono text-[10px] tracking-[.14em] text-muted uppercase">© <span id="year">2026</span> CLAPI — Todos los derechos reservados</p>
+      <p class="font-mono text-[10px] tracking-[.14em] text-muted uppercase">Hecho con obsesión por el detalle · Colombia</p>
+    </div>
+  </div>
+</footer>
+
+<!-- ══════════════════════════════ INTERFAZ (sin 3D) ══════════════════════════════ -->
+<script>
+(function () {
+  'use strict';
+
+  var reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  document.getElementById('year').textContent = new Date().getFullYear();
+
+  /* ── Tarjetas de proyectos: generadas desde datos ─────────────
+     Cuatro bloques idénticos salvo el número y las etiquetas no se
+     mantienen a mano; editar este array es toda la operación. */
+  var PLACEHOLDERS = [
+    { n: 1, tags: ['IA', 'Web'] },
+    { n: 2, tags: ['Automatización', 'API'] },
+    { n: 3, tags: ['Dashboard', 'Cloud'] },
+    { n: 4, tags: ['Agentes', 'Data'] }
+  ];
+
+  document.getElementById('project-grid').innerHTML = PLACEHOLDERS.map(function (p) {
+    return '' +
+      '<li class="reveal group relative overflow-hidden rounded-brand border border-dashed border-line bg-surface/25 backdrop-blur-md transition-all duration-400 hover:-translate-y-1.5 hover:border-brand-lite/45 hover:bg-surface/55">' +
+        '<div class="media-slot relative flex aspect-4/3 items-center justify-center overflow-hidden border-b border-line-soft bg-void/60">' +
+          '<img src="diseño/proyecto-' + p.n + '.png" alt="Vista previa del próximo proyecto de CLAPI" loading="lazy" decoding="async" class="h-full w-full object-cover">' +
+          '<div class="slot-fallback absolute inset-0 -z-10 flex flex-col items-center justify-center gap-2">' +
+            '<svg class="h-8 w-8 text-brand-lite/40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2.5"/><circle cx="8.5" cy="10" r="1.6"/><path d="m4 17 5-4.5 4.5 4 3-2.5L20 18"/></svg>' +
+            '<p class="font-mono text-[10px] text-muted">diseño/proyecto-' + p.n + '.png</p>' +
+          '</div>' +
+        '</div>' +
+        '<div class="p-5">' +
+          '<span class="inline-block rounded-full border border-line bg-void/70 px-2.5 py-1 font-mono text-[10px] tracking-[.14em] text-muted uppercase">Próximamente</span>' +
+          '<h3 class="mt-3 text-base font-bold text-lav">Proyecto 0' + p.n + '</h3>' +
+          '<p class="mt-1.5 text-sm leading-relaxed text-muted">Espacio reservado para el próximo caso del portafolio.</p>' +
+          '<ul class="mt-4 flex flex-wrap gap-1.5">' +
+            p.tags.map(function (t) {
+              return '<li class="rounded-md bg-void/70 px-2 py-1 font-mono text-[10px] tracking-wide text-muted/80">' + t + '</li>';
+            }).join('') +
+          '</ul>' +
+        '</div>' +
+      '</li>';
+  }).join('');
+
+  /* ── Menú móvil ───────────────────────────────────────────── */
+  var menuBtn = document.getElementById('menu-btn');
+  var mobileMenu = document.getElementById('mobile-menu');
+  var iconOpen = document.getElementById('icon-open');
+  var iconClose = document.getElementById('icon-close');
+
+  function setMenu(open) {
+    mobileMenu.classList.toggle('hidden', !open);
+    iconOpen.classList.toggle('hidden', open);
+    iconClose.classList.toggle('hidden', !open);
+    menuBtn.setAttribute('aria-expanded', String(open));
+    menuBtn.setAttribute('aria-label', open ? 'Cerrar menú de navegación' : 'Abrir menú de navegación');
+  }
+
+  menuBtn.addEventListener('click', function () {
+    setMenu(mobileMenu.classList.contains('hidden'));
+  });
+  mobileMenu.querySelectorAll('a').forEach(function (l) {
+    l.addEventListener('click', function () { setMenu(false); });
+  });
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && !mobileMenu.classList.contains('hidden')) { setMenu(false); menuBtn.focus(); }
+  });
+
+  /* ── Header + barra de progreso ───────────────────────────── */
+  var header = document.getElementById('site-header');
+  var bar = document.getElementById('progress-bar');
+
+  function onScroll() {
+    var y = window.scrollY;
+    var scrolled = y > 24;
+    header.classList.toggle('bg-void/80', scrolled);
+    header.classList.toggle('backdrop-blur-xl', scrolled);
+    header.classList.toggle('border-line', scrolled);
+    header.classList.toggle('border-transparent', !scrolled);
+
+    var max = document.documentElement.scrollHeight - window.innerHeight;
+    bar.style.width = (max > 0 ? (y / max) * 100 : 0) + '%';
+  }
+  onScroll();
+  window.addEventListener('scroll', onScroll, { passive: true });
+
+  /* ── Reveal on scroll ─────────────────────────────────────── */
+  var revealables = document.querySelectorAll('.reveal');
+  if (reduced || !('IntersectionObserver' in window)) {
+    revealables.forEach(function (el) { el.classList.add('reveal-in'); });
+  } else {
+    var io = new IntersectionObserver(function (entries) {
+      entries.forEach(function (entry, i) {
+        if (!entry.isIntersecting) return;
+        var el = entry.target;
+        setTimeout(function () { el.classList.add('reveal-in'); }, i * 70);
+        io.unobserve(el);
+      });
+    }, { threshold: 0.12, rootMargin: '0px 0px -8% 0px' });
+    revealables.forEach(function (el) { io.observe(el); });
+  }
+
+  /* ── Scrollspy ────────────────────────────────────────────── */
+  var navLinks = document.querySelectorAll('.nav-link');
+  var sections = ['servicios', 'casos', 'proyectos', 'nosotros', 'contacto']
+    .map(function (id) { return document.getElementById(id); }).filter(Boolean);
+
+  if ('IntersectionObserver' in window && sections.length) {
+    var spy = new IntersectionObserver(function (entries) {
+      entries.forEach(function (entry) {
+        if (!entry.isIntersecting) return;
+        navLinks.forEach(function (link) {
+          var active = link.getAttribute('href') === '#' + entry.target.id;
+          link.classList.toggle('text-paper', active);
+          link.classList.toggle('bg-surface/70', active);
+          link.classList.toggle('text-muted', !active);
+        });
+      });
+    }, { rootMargin: '-45% 0px -50% 0px' });
+    sections.forEach(function (s) { spy.observe(s); });
+  }
+
+  /* ── Placeholders de imagen ───────────────────────────────── */
+  document.querySelectorAll('.media-slot img').forEach(function (img) {
+    function fail() {
+      img.style.display = 'none';
+      var fb = img.parentElement.querySelector('.slot-fallback');
+      if (fb) fb.classList.remove('-z-10');
+    }
+    img.addEventListener('error', fail);
+    if (img.complete && img.naturalWidth === 0) fail();
+  });
+
+  /* ── Formulario → WhatsApp ────────────────────────────────── */
+  var WHATSAPP_NUMBER = '573001234567'; // ← reemplazar por el número real
+
+  var form = document.getElementById('contact-form');
+  var status = document.getElementById('form-status');
+
+  function showError(field, message) {
+    var msg = field.parentElement.querySelector('.error-msg');
+    field.classList.add('border-accent');
+    field.setAttribute('aria-invalid', 'true');
+    if (msg) { msg.textContent = message; msg.classList.remove('hidden'); }
+  }
+  function clearError(field) {
+    var msg = field.parentElement.querySelector('.error-msg');
+    field.classList.remove('border-accent');
+    field.removeAttribute('aria-invalid');
+    if (msg) { msg.textContent = ''; msg.classList.add('hidden'); }
+  }
+
+  form.querySelectorAll('input, textarea').forEach(function (f) {
+    f.addEventListener('input', function () { clearError(f); });
+  });
+
+  form.addEventListener('submit', function (e) {
+    e.preventDefault();
+    status.textContent = '';
+
+    var nombre = form.nombre, email = form.email, mensaje = form.mensaje;
+    var firstInvalid = null;
+    [nombre, email, mensaje].forEach(clearError);
+
+    if (!nombre.value.trim()) {
+      showError(nombre, 'Necesitamos tu nombre para responderte.');
+      firstInvalid = firstInvalid || nombre;
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email.value.trim())) {
+      showError(email, 'Escribe un correo válido, ej. tu@empresa.com');
+      firstInvalid = firstInvalid || email;
+    }
+    if (mensaje.value.trim().length < 10) {
+      showError(mensaje, 'Cuéntanos un poco más (mínimo 10 caracteres).');
+      firstInvalid = firstInvalid || mensaje;
+    }
+    if (firstInvalid) { firstInvalid.focus(); return; }
+
+    var texto =
+      'Hola CLAPI, quiero iniciar un proyecto.\n\n' +
+      'Nombre: ' + nombre.value.trim() + '\n' +
+      'Correo: ' + email.value.trim() + '\n' +
+      'Empresa: ' + (form.empresa.value.trim() || 'No especificada') + '\n' +
+      'Necesito: ' + form.tipo.value + '\n\n' +
+      mensaje.value.trim();
+
+    window.open('https://wa.me/' + WHATSAPP_NUMBER + '?text=' + encodeURIComponent(texto), '_blank', 'noopener');
+    status.textContent = 'Abrimos WhatsApp con tu mensaje listo para enviar.';
+    form.reset();
+  });
+})();
+</script>
+
+<!-- ══════════════════════════════ ESCENA 3D ══════════════════════════════ -->
+<script type="module">
+import * as THREE from 'three';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+
+/*
+  ── El isotipo CLAPI en 3D ───────────────────────────────────────────────────
+
+  Antes había un prisma de vidrio flotando delante de un plano con el logo en
+  2D detrás de él (el sujeto de refracción) — dos representaciones del mismo
+  logo a la vez, una difusa y una nítida. Ahora hay una sola: el isotipo real,
+  extruido a partir de su silueta vectorial, con material físico opaco. Mismo
+  pipeline de extracción que logo3D.html (ver ese archivo para el detalle del
+  trazado de contorno) — se duplica LOGO_PATHS aquí porque este sitio es HTML
+  plano sin build, así que no hay módulo compartido entre páginas.
+*/
+
+const host = document.getElementById('scene');
+const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+const isMobile = window.matchMedia('(max-width: 767px)').matches;
+
+const LOGO_PATHS = {"yellow":[{"outer":[[-0.0559,0.4941],[-0.0206,0.4941],[0.0147,0.4824],[0.3529,0.2647],[0.3824,0.2382],[0.3971,0.2029],[0.3971,0.0353],[0.3735,0.0029],[0.2853,-0.0059],[0.1353,-0.0029],[0.1265,0.0059],[0.1176,0.05],[0.0941,0.0706],[-0.3235,0.3206],[-0.3206,0.3294],[-0.1,0.4765]],"holes":[]},{"outer":[[0.1676,-0.1441],[0.3882,-0.1441],[0.3971,-0.1529],[0.3941,-0.2147],[0.3765,-0.25],[0.3559,-0.2706],[0.2118,-0.3647],[0.1824,-0.3676],[0.0265,-0.2588],[0.1294,-0.1912]],"holes":[]}],"violetLight":[{"outer":[[-0.3765,0.25],[-0.1676,0.1176],[-0.1412,0.0912],[-0.1324,0.0706],[-0.1324,-0.1853],[-0.1235,-0.2088],[-0.1029,-0.2294],[0.1441,-0.3971],[0.1471,-0.4088],[0.0206,-0.4882],[-0.0353,-0.4912],[-0.0676,-0.4765],[-0.3735,-0.2706],[-0.3971,-0.2324],[-0.4059,-0.1941],[-0.4059,0.2029],[-0.3971,0.2294]],"holes":[]}],"violetDark":[{"outer":[[-0.2971,0.2971],[-0.05,0.15],[-0.1147,0.1088],[-0.1294,0.0941],[-0.1324,0.0735],[-0.1382,0.0912],[-0.1676,0.1206],[-0.3735,0.2471]],"holes":[]}]};
+
+/* Ancho visible en z=0 sobre el 16:9 contra el que se compuso la escena.
+   fov 38 a distancia 6 → altura visible 4.13; 4.13 × 16/9 = 7.35. */
+const DESIGN_VIEWPORT_WIDTH = 7.35;
+
+/* Encaje suavizado (exponente 0.75, no lineal): en un teléfono la marca puede
+   ocupar más del ancho porque no compite con nada a los lados. Lineal la
+   dejaría al 32% en todas partes, que es aritmética correcta y mala
+   composición. */
+const softFit = (w) => Math.min(1, Math.pow(Math.max(w, 0.001) / DESIGN_VIEWPORT_WIDTH, 0.75));
+
+/* Amortiguación independiente del framerate. lerp(a,b,0.1) converge el doble
+   de rápido a 120Hz que a 60Hz: la escena se sentiría distinta según el
+   monitor. */
+const damp = (lambda, dt) => 1 - Math.pow(lambda, dt);
+const smootherstep = (x) => { const t = Math.min(Math.max(x, 0), 1); return t * t * t * (t * (t * 6 - 15) + 10); };
+
+let renderer;
+try {
+  /*
+    alpha:true — ya no hace falta un fondo opaco dentro de la escena.
+    Sin vidrio con transmisión que muestrear, el canvas puede ser transparente
+    de verdad y dejar ver el degradado radial + rejilla técnica que ya vive en
+    el CSS de la página, en vez de duplicar ese fondo dentro de three.js.
+  */
+  renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: 'high-performance' });
+} catch (err) {
+  console.warn('[CLAPI] WebGL no disponible, se mantiene el fondo CSS.', err);
+}
+
+if (renderer) {
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, isMobile ? 1.5 : 2));
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.0;
+  /* PCFSoftShadowMap: la variante con bordes suaves del mapa de sombras
+     estándar de three, sin el coste de un blur separado. */
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  host.appendChild(renderer.domElement);
+
+  const scene = new THREE.Scene();
+  // sin scene.background: el canvas es transparente, ver nota de alpha arriba.
+
+  const camera = new THREE.PerspectiveCamera(38, window.innerWidth / window.innerHeight, 0.1, 100);
+  camera.position.set(0, 0, 6);
+
+  /* Entorno neutro y tenue: aporta reflejos de estudio sutiles a la laca del
+     material sin teñirlo — el color lo ponen las luces de marca, no el
+     entorno. Más intensidad que esto y el amarillo se satura a blanco. */
+  const pmrem = new THREE.PMREMGenerator(renderer);
+  scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+  scene.environmentIntensity = 0.38;
+
+  /* ── Geometría: extrusión de la silueta real del isotipo ─────────────── */
+  function shapeFromPolygon(outer, holes) {
+    const shape = new THREE.Shape(outer.map(([x, y]) => new THREE.Vector2(x, y)));
+    for (const h of holes) shape.holes.push(new THREE.Path(h.map(([x, y]) => new THREE.Vector2(x, y))));
+    return shape;
+  }
+
+  const MARK_SCALE = 2.6;
+  const DEPTH = 0.16;
+  const extrudeSettings = { depth: DEPTH, bevelEnabled: true, bevelThickness: 0.02, bevelSize: 0.017, bevelSegments: 5, curveSegments: 1 };
+
+  /* Sin geo.center(): las piezas deben conservar su posición relativa (la
+     cinta amarilla cae exactamente sobre el hueco de la "C"); centrar cada
+     una por separado las desalinearía entre sí. */
+  function buildGroup(entries, material, zOffset) {
+    const group = new THREE.Group();
+    for (const { outer, holes } of entries) {
+      const mesh = new THREE.Mesh(new THREE.ExtrudeGeometry(shapeFromPolygon(outer, holes), extrudeSettings), material);
+      mesh.position.z = zOffset;
+      mesh.castShadow = true;
+      mesh.receiveShadow = true;
+      group.add(mesh);
+    }
+    return group;
+  }
+
+  /* Rugosidad moderada + clearcoat bajo: laca satinada, no un plástico
+     espejado — a metalness/roughness más bajos el amarillo se quemaba a
+     blanco bajo las luces de acento (visto al construir logo3D.html). */
+  const matVioletLight = new THREE.MeshPhysicalMaterial({ color: '#5B34E8', roughness: 0.42, metalness: 0.08, clearcoat: 0.45, clearcoatRoughness: 0.4 });
+  const matVioletDark  = new THREE.MeshPhysicalMaterial({ color: '#2E1580', roughness: 0.44, metalness: 0.08, clearcoat: 0.4,  clearcoatRoughness: 0.4 });
+  const matYellow      = new THREE.MeshPhysicalMaterial({ color: '#FFD500', roughness: 0.38, metalness: 0.05, clearcoat: 0.4,  clearcoatRoughness: 0.4 });
+
+  const mark = new THREE.Group();
+  const ring = buildGroup(LOGO_PATHS.violetLight, matVioletLight, 0);
+  const ringDark = buildGroup(LOGO_PATHS.violetDark, matVioletDark, 0);
+  /* La cinta amarilla se adelanta ligeramente: en el isotipo plano se dibuja
+     POR ENCIMA del violeta en el pliegue — ese desfase en Z traduce esa
+     superposición 2D a profundidad real en vez de dejarlas coplanares. */
+  const ribbon = buildGroup(LOGO_PATHS.yellow, matYellow, DEPTH * 0.4);
+  mark.add(ring, ringDark, ribbon);
+  mark.position.z = -DEPTH * 0.6; // centra la extrusión en Z para que gire sobre su propio centro
+  scene.add(mark);
+
+  /*
+    Resplandor detrás de la marca: un sprite aditivo con un degradado radial
+    generado en canvas (sin pedir otra imagen), en los dos colores de marca.
+    additive + depthWrite:false para que se sume a lo que hay detrás en vez de
+    taparlo — es luz, no una superficie.
+  */
+  const glowCanvas = document.createElement('canvas');
+  glowCanvas.width = glowCanvas.height = 256;
+  const gctx = glowCanvas.getContext('2d');
+  const glowGrad = gctx.createRadialGradient(128, 128, 0, 128, 128, 128);
+  glowGrad.addColorStop(0, 'rgba(155,124,255,0.55)');
+  glowGrad.addColorStop(0.5, 'rgba(255,213,0,0.18)');
+  glowGrad.addColorStop(1, 'rgba(255,213,0,0)');
+  gctx.fillStyle = glowGrad;
+  gctx.fillRect(0, 0, 256, 256);
+  const glow = new THREE.Sprite(new THREE.SpriteMaterial({
+    map: new THREE.CanvasTexture(glowCanvas), transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+  }));
+  glow.scale.setScalar(5.2);
+  glow.position.z = -1.4;
+  scene.add(glow);
+
+  /* Suelo invisible que solo pinta la sombra que cae sobre él (ShadowMaterial
+     no se ve a sí mismo, únicamente la sombra proyectada) — da apoyo/peso a
+     la marca sin necesitar un plano visible ni geometría de piso real. */
+  const shadowCatcher = new THREE.Mesh(
+    new THREE.PlaneGeometry(9, 9),
+    new THREE.ShadowMaterial({ opacity: 0.32 })
+  );
+  shadowCatcher.rotation.x = -Math.PI / 2;
+  shadowCatcher.position.y = -1.7;
+  shadowCatcher.receiveShadow = true;
+  scene.add(shadowCatcher);
+
+  /* ── Partículas: motas de marca a la deriva, muy tenues ────────────────── */
+  const PARTICLE_COUNT = isMobile ? 70 : 140;
+  const particlePositions = new Float32Array(PARTICLE_COUNT * 3);
+  for (let i = 0; i < PARTICLE_COUNT; i++) {
+    particlePositions[i * 3 + 0] = (Math.random() - 0.5) * 9;
+    particlePositions[i * 3 + 1] = (Math.random() - 0.5) * 5.5;
+    particlePositions[i * 3 + 2] = (Math.random() - 0.5) * 5 - 1;
+  }
+  const particleGeo = new THREE.BufferGeometry();
+  particleGeo.setAttribute('position', new THREE.BufferAttribute(particlePositions, 3));
+  const particles = new THREE.Points(particleGeo, new THREE.PointsMaterial({
+    color: '#C9BFFF', size: 0.028, transparent: true, opacity: 0.4, sizeAttenuation: true, depthWrite: false,
+  }));
+  scene.add(particles);
+
+  /* ── Iluminación cinemática ─────────────────────────────────────────────
+     Ambiental tenue + direccional principal con sombra suave + dos acentos
+     de color (violeta y dorado) que resaltan el volumen sin quemar el
+     amarillo — las intensidades altas de una prueba anterior lo saturaban
+     a blanco bajo el mismo ACESFilmicToneMapping que se usa aquí. */
+  const ambient = new THREE.AmbientLight(0xffffff, 0.28);
+  scene.add(ambient);
+
+  const key = new THREE.DirectionalLight(0xffffff, 1.5);
+  key.position.set(2.4, 3, 4);
+  key.castShadow = true;
+  key.shadow.mapSize.set(isMobile ? 512 : 1024, isMobile ? 512 : 1024);
+  key.shadow.camera.left = -3; key.shadow.camera.right = 3;
+  key.shadow.camera.top = 3; key.shadow.camera.bottom = -3;
+  key.shadow.camera.near = 1; key.shadow.camera.far = 10;
+  key.shadow.bias = -0.0015;
+  scene.add(key);
+  scene.add(key.target);
+
+  const accentViolet = new THREE.PointLight(0x9B7CFF, 4.5, 0, 1.8);
+  accentViolet.position.set(-3.2, 1, 2.4);
+  scene.add(accentViolet);
+
+  const accentGold = new THREE.PointLight(0xFFD500, 5, 0, 1.8);
+  accentGold.position.set(3.4, -1, 1.8);
+  scene.add(accentGold);
+
+  /* ── Puntero y scroll ─────────────────────────────────────────────────── */
+  const pointer = { x: 0, y: 0, tx: 0, ty: 0 };
+  if (!reduced) {
+    window.addEventListener('pointermove', (e) => {
+      pointer.tx = (e.clientX / window.innerWidth) * 2 - 1;
+      pointer.ty = -((e.clientY / window.innerHeight) * 2 - 1);
+    }, { passive: true });
+  }
+
+  const hero = document.getElementById('hero');
+  let heroProgress = 0;
+  function readScroll() {
+    const h = hero.offsetHeight || window.innerHeight;
+    heroProgress = Math.min(Math.max(window.scrollY / h, 0), 1);
+  }
+  readScroll();
+  window.addEventListener('scroll', readScroll, { passive: true });
+
+  /* ── Bucle ────────────────────────────────────────────────────────────── */
+  const targetQuat = new THREE.Quaternion();   // asignados una sola vez: crearlos
+  const scratchEuler = new THREE.Euler();      // por frame serían ~60 objetos/s.
+  const clock = new THREE.Clock();
+  let spin = 0;
+  let visible = true;
+  let revealed = false;
+
+  const gizmoOut = {
+    x: document.querySelector('#gizmo [data-axis="x"]'),
+    y: document.querySelector('#gizmo [data-axis="y"]'),
+    z: document.querySelector('#gizmo [data-axis="z"]')
+  };
+  let gizmoTick = 0;
+
+  document.addEventListener('visibilitychange', () => { visible = !document.hidden; });
+
+  function frame() {
+    requestAnimationFrame(frame);
+    if (!visible) return;
+
+    /* Tras cambiar de pestaña, delta puede llegar como varios segundos y la
+       marca daría una vuelta entera en un frame. */
+    const dt = Math.min(clock.getDelta(), 1 / 30);
+
+    if (!reduced) spin += dt * 0.24;
+
+    /* El scroll monta su rotación sobre el giro en reposo: la marca girando
+       es el motor visual de toda la secuencia del hero. */
+    const scrollSpin = reduced ? 0 : heroProgress * Math.PI * 2.4;
+
+    const t = damp(0.0025, dt);
+    pointer.x += (pointer.tx - pointer.x) * t;
+    pointer.y += (pointer.ty - pointer.y) * t;
+
+    const tiltX = reduced ? 0 : -pointer.y * 0.3;
+    const tiltY = reduced ? 0 : pointer.x * 0.45;
+
+    /* 0.18 rad de inclinación base: a diferencia del prisma, el isotipo se
+       lee bien casi de frente — solo necesita un giro leve para mostrar el
+       bisel y el espesor de la extrusión. */
+    scratchEuler.set(tiltX + 0.18, spin + scrollSpin + tiltY, tiltY * 0.14);
+    targetQuat.setFromEuler(scratchEuler);
+    mark.quaternion.slerp(targetQuat, damp(0.0015, dt));
+
+    /* La marca se aleja mientras el hero se va. Encoger en la escena, no
+       desvanecer el canvas: el desvanecido lo hace la capa de arriba. */
+    const recede = reduced ? 1 : 1 + (0.68 - 1) * Math.min(heroProgress / 0.4, 1);
+
+    /* Encaje responsive: se recalcula cada frame a partir del viewport, así
+       que rotar el teléfono lo re-encaja sin listener ni breakpoint. */
+    const visibleH = 2 * camera.position.z * Math.tan((camera.fov * Math.PI / 180) / 2);
+    const visibleW = visibleH * camera.aspect;
+    const fit = softFit(visibleW);
+    mark.scale.setScalar(recede * fit * MARK_SCALE);
+
+    /* Composición: en escritorio la marca vive en la mitad derecha, donde el
+       hero le dejó la columna libre; en móvil se centra arriba, sobre el
+       bloque de 38svh que el hero reserva. Un balanceo vertical muy suave
+       (float) se suma encima — es el "hover" pedido, sin depender de que el
+       puntero esté sobre el objeto (en móvil no hay puntero que lo dispare). */
+    const wide = visibleW / visibleH > 1.05;
+    const float = reduced ? 0 : Math.sin(spin * 0.6) * 0.07;
+    mark.position.x = wide ? visibleW * 0.22 : 0;
+    mark.position.y = (wide ? 0.05 : visibleH * 0.16) + float;
+
+    glow.position.x = mark.position.x;
+    glow.position.y = mark.position.y;
+    glow.scale.setScalar(5.2 * fit);
+    shadowCatcher.position.x = mark.position.x;
+
+    key.target.position.set(mark.position.x, mark.position.y, mark.position.z);
+
+    if (!reduced) {
+      accentViolet.position.x = -3.2 + mark.position.x + pointer.x * 1.4;
+      accentViolet.position.y = 1 + pointer.y * 0.6;
+      accentGold.position.x = 3.4 + mark.position.x - pointer.x * 1.4;
+      accentGold.position.y = -1 - pointer.y * 0.6;
+      particles.rotation.y += dt * 0.015;
+    }
+
+    /* La escena se apaga bajo las secciones: allí el texto manda y el objeto
+       3D sería ruido detrás de párrafos. */
+    const presence = 1 - smootherstep(heroProgress) * 0.86;
+    host.style.opacity = revealed ? presence.toFixed(3) : '0';
+
+    renderer.render(scene, camera);
+
+    if (!revealed) { revealed = true; document.body.dataset.webgl = 'on'; }
+
+    /* El HUD se actualiza a ~7Hz, no a 60: escribir textContent cada frame es
+       trabajo de layout por un dato que nadie lee tan rápido. */
+    if (gizmoOut.x && ++gizmoTick % 9 === 0) {
+      gizmoOut.x.textContent = mark.quaternion.x.toFixed(2);
+      gizmoOut.y.textContent = mark.quaternion.y.toFixed(2);
+      gizmoOut.z.textContent = mark.quaternion.z.toFixed(2);
+    }
+  }
+  frame();
+
+  /* ── Resize ───────────────────────────────────────────────────────────── */
+  let resizeRaf = 0;
+  window.addEventListener('resize', () => {
+    cancelAnimationFrame(resizeRaf);
+    resizeRaf = requestAnimationFrame(() => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      readScroll();
+    });
+  }, { passive: true });
+}
+</script>
+</body>
+</html>

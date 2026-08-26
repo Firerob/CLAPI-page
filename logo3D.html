@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CLAPI — Isotipo 3D</title>
+<meta name="description" content="Figura 3D del isotipo de CLAPI, extruida a partir de la silueta vectorial real de la marca y renderizada con Three.js.">
+<meta name="theme-color" content="#06050C">
+<link rel="icon" href="diseño/Isotipo-transparent.png">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+<script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/"
+  }
+}
+</script>
+
+<style type="text/tailwindcss">
+  @theme {
+    --color-void:       #06050C;
+    --color-brand:      #532CE1;
+    --color-brand-dark: #2E1580;
+    --color-brand-lite: #9B7CFF;
+    --color-accent:     #FFD500;
+    --color-lav:        #EDE6FF;
+    --color-paper:      #F7F7F7;
+    --color-muted:      #B9B4C7;
+    --color-line:       rgba(237, 230, 255, 0.10);
+
+    --font-sans: "Sora", ui-sans-serif, system-ui, sans-serif;
+    --font-mono: "JetBrains Mono", ui-monospace, monospace;
+  }
+</style>
+
+<style>
+  html, body { height: 100%; overscroll-behavior: none; }
+  body { background: #06050C; }
+
+  #stage { position: fixed; inset: 0; touch-action: none; cursor: grab; }
+  #stage:active { cursor: grabbing; }
+  #stage canvas { display: block; width: 100%; height: 100%; }
+
+  .grid-tech {
+    background-image:
+      linear-gradient(to right,  rgba(155,124,255,.08) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(155,124,255,.08) 1px, transparent 1px);
+    background-size: 68px 68px;
+    mask-image: radial-gradient(ellipse 70% 60% at 50% 48%, #000 25%, transparent 74%);
+    -webkit-mask-image: radial-gradient(ellipse 70% 60% at 50% 48%, #000 25%, transparent 74%);
+  }
+
+  @keyframes clapi-pulse { 0%,100% { opacity:1; transform:scale(1) } 50% { opacity:.35; transform:scale(.8) } }
+  .live-dot { animation: clapi-pulse 2.2s ease-in-out infinite; }
+
+  #loading { transition: opacity .5s ease; }
+
+  :focus-visible { outline: 2px solid #FFD500; outline-offset: 3px; border-radius: 6px; }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+  }
+</style>
+</head>
+
+<body class="font-sans text-muted antialiased selection:bg-accent selection:text-void">
+
+<div aria-hidden="true" class="grid-tech pointer-events-none fixed inset-0 z-0"></div>
+
+<!-- Escenario 3D -->
+<div id="stage" role="img" aria-label="Figura 3D del isotipo de CLAPI. Arrastra para rotarla, usa la rueda del ratón para acercar o alejar."></div>
+
+<!-- Pantalla de carga -->
+<div id="loading" class="pointer-events-none fixed inset-0 z-30 flex items-center justify-center bg-void">
+  <p class="font-mono text-xs tracking-[.22em] text-muted uppercase">Cargando escena…</p>
+</div>
+
+<!-- Aviso si WebGL no está disponible -->
+<div id="no-webgl" class="fixed inset-0 z-30 hidden flex-col items-center justify-center gap-4 bg-void px-6 text-center">
+  <img src="diseño/Isotipo-transparent.png" alt="" class="h-16 w-16 opacity-70">
+  <p class="max-w-sm text-sm leading-relaxed text-muted">
+    Tu navegador no puede renderizar la escena 3D. Prueba con una versión reciente de Chrome, Edge o Firefox.
+  </p>
+</div>
+
+<!-- HUD -->
+<header class="pointer-events-none fixed inset-x-0 top-0 z-20 flex items-start justify-between gap-4 p-5 sm:p-8">
+  <a href="index.html" class="group pointer-events-auto flex items-center gap-3" aria-label="Volver a CLAPI">
+    <img src="diseño/Isotipo-transparent.png" alt="" class="h-8 w-8 transition-transform duration-500 group-hover:-rotate-6">
+    <span class="text-base font-extrabold tracking-[.24em] text-paper">CLAPI</span>
+  </a>
+
+  <p class="pointer-events-auto inline-flex items-center gap-2.5 rounded-full border border-line bg-white/5 px-4 py-2 font-mono text-[.65rem] tracking-[.18em] text-lav uppercase backdrop-blur-md">
+    <span class="live-dot h-1.5 w-1.5 rounded-full bg-accent"></span>
+    Isotipo · Render 3D
+  </p>
+</header>
+
+<footer class="pointer-events-none fixed inset-x-0 bottom-0 z-20 flex flex-col items-center gap-4 p-5 sm:p-8">
+  <p class="font-mono text-[.62rem] tracking-[.18em] text-muted/70 uppercase">
+    Arrastra para orbitar · Rueda para acercar
+  </p>
+  <a href="index.html"
+     class="pointer-events-auto inline-flex cursor-pointer items-center gap-2 rounded-xl border border-line bg-white/5 px-5 py-3 text-sm font-semibold text-lav backdrop-blur-md transition-all duration-300 hover:border-brand-lite/50 hover:bg-white/10">
+    <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 12H5M11 18l-6-6 6-6"/></svg>
+    Volver al sitio
+  </a>
+</footer>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+
+/*
+  ── Figura 3D del isotipo CLAPI ─────────────────────────────────────────────
+
+  No es un plano con la textura del logo (eso ya vive en el prisma del hero,
+  index.html) ni un modelo modelado a mano: es la silueta REAL de
+  diseño/Isotipo-transparent.png, vectorizada píxel a píxel y extruida.
+
+  Pipeline de extracción (fuera del navegador, en Python — ver
+  scripts/extract-logo-shapes.md si se documenta):
+    1. Aislar por color los tres grupos del isotipo: violeta principal, la
+       solapa violeta oscura del pliegue, y la cinta amarilla (dos piezas
+       inconexas).
+    2. Componentes conexas + relleno por inundación para detectar agujeros.
+    3. Trazado de contorno Moore-Neighbor sobre cada componente.
+    4. Simplificación Douglas-Peucker para pasar de un contorno en escalera
+       de píxeles a un polígono de pocos vértices con bordes rectos.
+    5. Normalizado a coordenadas centradas, altura total = 1.
+
+  El resultado (LOGO_PATHS) son polígonos reales del logo, no una
+  aproximación dibujada a ojo — por eso el "hueco" de la C, el pliegue de la
+  cinta y las dos piezas amarillas caen exactamente donde caen en la marca.
+*/
+const LOGO_PATHS = {"yellow":[{"outer":[[-0.0559,0.4941],[-0.0206,0.4941],[0.0147,0.4824],[0.3529,0.2647],[0.3824,0.2382],[0.3971,0.2029],[0.3971,0.0353],[0.3735,0.0029],[0.2853,-0.0059],[0.1353,-0.0029],[0.1265,0.0059],[0.1176,0.05],[0.0941,0.0706],[-0.3235,0.3206],[-0.3206,0.3294],[-0.1,0.4765]],"holes":[]},{"outer":[[0.1676,-0.1441],[0.3882,-0.1441],[0.3971,-0.1529],[0.3941,-0.2147],[0.3765,-0.25],[0.3559,-0.2706],[0.2118,-0.3647],[0.1824,-0.3676],[0.0265,-0.2588],[0.1294,-0.1912]],"holes":[]}],"violetLight":[{"outer":[[-0.3765,0.25],[-0.1676,0.1176],[-0.1412,0.0912],[-0.1324,0.0706],[-0.1324,-0.1853],[-0.1235,-0.2088],[-0.1029,-0.2294],[0.1441,-0.3971],[0.1471,-0.4088],[0.0206,-0.4882],[-0.0353,-0.4912],[-0.0676,-0.4765],[-0.3735,-0.2706],[-0.3971,-0.2324],[-0.4059,-0.1941],[-0.4059,0.2029],[-0.3971,0.2294]],"holes":[]}],"violetDark":[{"outer":[[-0.2971,0.2971],[-0.05,0.15],[-0.1147,0.1088],[-0.1294,0.0941],[-0.1324,0.0735],[-0.1382,0.0912],[-0.1676,0.1206],[-0.3735,0.2471]],"holes":[]}]};
+
+const stage = document.getElementById('stage');
+const loading = document.getElementById('loading');
+const noWebgl = document.getElementById('no-webgl');
+const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+let renderer;
+try {
+  renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false, powerPreference: 'high-performance' });
+} catch (err) {
+  renderer = null;
+}
+if (!renderer || !renderer.getContext()) {
+  loading.style.display = 'none';
+  noWebgl.classList.remove('hidden');
+  noWebgl.classList.add('flex');
+  throw new Error('WebGL no disponible');
+}
+
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.0;
+stage.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color('#06050C');
+
+const camera = new THREE.PerspectiveCamera(34, window.innerWidth / window.innerHeight, 0.1, 100);
+
+/* Declaradas antes del encuadre porque fitDistance() las necesita ya al
+   posicionar la cámara, más abajo se reutilizan para construir la geometría. */
+const WORLD_SCALE = 4.6;
+const DEPTH = 0.16;
+
+/*
+  Encuadre por ajuste de frustum, no una distancia fija.
+
+  Una distancia fija asume una relación de aspecto — funciona en 16:9 y
+  recorta el objeto en un móvil vertical (3:4 o más estrecho), exactamente lo
+  que pasaba antes de esto: a distancia 5.6 el objeto llenaba y desbordaba el
+  encuadre en 390x844 porque el ancho visible a esa distancia es proporcional
+  al aspecto, y un aspecto angosto dejaba menos ancho del que la pieza ocupa.
+
+  Se calcula la distancia que necesita CADA eje para que el objeto (medio-alto
+  HALF_H, medio-ancho HALF_W en unidades de mundo) quepa en esa fracción del
+  encuadre, y se usa la mayor — así nunca se recorta en ningún aspecto.
+*/
+const HALF_H = 0.49 * WORLD_SCALE;   // altura normalizada del isotipo ≈ 0.98
+const HALF_W = 0.41 * WORLD_SCALE;   // ancho normalizado ≈ 0.82
+const FILL_FRACTION = 0.62;          // el objeto ocupa ~62% del eje más corto
+
+function fitDistance(aspect) {
+  const vFov = (camera.fov * Math.PI) / 180;
+  const tanHalfV = Math.tan(vFov / 2);
+  const distForHeight = HALF_H / FILL_FRACTION / tanHalfV;
+  const distForWidth = HALF_W / FILL_FRACTION / (tanHalfV * aspect);
+  return Math.max(distForHeight, distForWidth);
+}
+
+camera.position.set(0, 0.1, fitDistance(window.innerWidth / window.innerHeight));
+
+const pmrem = new THREE.PMREMGenerator(renderer);
+scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+scene.environmentIntensity = 0.38;
+
+/* ── Construcción de geometría a partir de LOGO_PATHS ────────────────────── */
+function shapeFromPolygon(outer, holes) {
+  const shape = new THREE.Shape(outer.map(([x, y]) => new THREE.Vector2(x, y)));
+  for (const h of holes) {
+    shape.holes.push(new THREE.Path(h.map(([x, y]) => new THREE.Vector2(x, y))));
+  }
+  return shape;
+}
+
+const extrudeSettings = {
+  depth: DEPTH,
+  bevelEnabled: true,
+  bevelThickness: 0.02,
+  bevelSize: 0.017,
+  bevelSegments: 5,
+  curveSegments: 1,
+};
+
+/*
+  Sin geo.center(): cada pieza tiene que conservar su posición relativa a las
+  demás (la cinta amarilla cae exactamente sobre el hueco de la "C"), así que
+  centrar por pieza — que recoloca cada una a su propio origen — las
+  desalinearía entre sí.
+*/
+function buildGroup(entries, material, zOffset) {
+  const group = new THREE.Group();
+  for (const { outer, holes } of entries) {
+    const shape = shapeFromPolygon(outer, holes);
+    const geo = new THREE.ExtrudeGeometry(shape, extrudeSettings);
+    const mesh = new THREE.Mesh(geo, material);
+    mesh.position.z = zOffset;
+    group.add(mesh);
+  }
+  return group;
+}
+
+const matVioletLight = new THREE.MeshPhysicalMaterial({
+  color: '#5B34E8', roughness: 0.42, metalness: 0.08, clearcoat: 0.45, clearcoatRoughness: 0.4,
+});
+const matVioletDark = new THREE.MeshPhysicalMaterial({
+  color: '#2E1580', roughness: 0.44, metalness: 0.08, clearcoat: 0.4, clearcoatRoughness: 0.4,
+});
+const matYellow = new THREE.MeshPhysicalMaterial({
+  color: '#FFD500', roughness: 0.38, metalness: 0.05, clearcoat: 0.4, clearcoatRoughness: 0.4,
+});
+
+const root = new THREE.Group();
+
+/* El anillo violeta (cuerpo principal + solapa oscura del pliegue) vive en
+   z=0..DEPTH. La cinta amarilla se adelanta ligeramente (zOffset=DEPTH*0.4):
+   en el isotipo plano la cinta se dibuja POR ENCIMA del violeta en el pliegue
+   — ese pequeño desfase en Z traduce esa superposición 2D a profundidad real
+   en vez de dejar las tres piezas coplanares y sin lectura de "doblez". */
+const ring = buildGroup(LOGO_PATHS.violetLight, matVioletLight, 0);
+const ringDark = buildGroup(LOGO_PATHS.violetDark, matVioletDark, 0);
+const ribbon = buildGroup(LOGO_PATHS.yellow, matYellow, DEPTH * 0.4);
+
+root.add(ring, ringDark, ribbon);
+root.scale.setScalar(WORLD_SCALE);
+/* La extrusión crece en +Z; centrarla en Z para que el objeto orbite sobre
+   su propio centro de masa en vez de girar en torno a su cara frontal. */
+root.position.z = -DEPTH * WORLD_SCALE * 0.6;
+scene.add(root);
+
+/* ── Sombra de contacto (textura generada, sin asset externo) ─────────────── */
+const shadowCanvas = document.createElement('canvas');
+shadowCanvas.width = shadowCanvas.height = 256;
+const sctx = shadowCanvas.getContext('2d');
+const grad = sctx.createRadialGradient(128, 128, 10, 128, 128, 128);
+grad.addColorStop(0, 'rgba(0,0,0,0.55)');
+grad.addColorStop(1, 'rgba(0,0,0,0)');
+sctx.fillStyle = grad;
+sctx.fillRect(0, 0, 256, 256);
+const shadowTex = new THREE.CanvasTexture(shadowCanvas);
+const shadowMesh = new THREE.Mesh(
+  new THREE.PlaneGeometry(6.5, 6.5),
+  new THREE.MeshBasicMaterial({ map: shadowTex, transparent: true, depthWrite: false })
+);
+shadowMesh.rotation.x = -Math.PI / 2;
+shadowMesh.position.y = -2.55;
+scene.add(shadowMesh);
+
+/* ── Luces: los dos colores de marca, igual que el prisma del hero ────────── */
+scene.add(new THREE.AmbientLight(0xffffff, 0.3));
+
+const key = new THREE.DirectionalLight(0xffffff, 1.3);
+key.position.set(2.6, 3.2, 4);
+scene.add(key);
+
+const rim = new THREE.PointLight(0xffd500, 5, 0, 1.8);
+rim.position.set(-3.4, -1.2, 2.4);
+scene.add(rim);
+
+const fill = new THREE.PointLight(0x9b7cff, 4, 0, 1.8);
+fill.position.set(3.2, -0.6, -2.2);
+scene.add(fill);
+
+/* ── Controles: arrastrar para orbitar, rueda para acercar ────────────────── */
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.target.set(0, 0, 0);
+controls.enableDamping = true;
+controls.dampingFactor = 0.08;
+controls.enablePan = false;
+/* Relativos a la distancia de encuadre, no un valor fijo — esa distancia
+   cambia por un factor de ~4x entre un monitor ancho y un móvil vertical
+   (visto arriba: 11.9 vs 21.6 en unidades de mundo), así que un rango fijo
+   dejaría el zoom demasiado suelto en un aspecto y bloqueado en el otro. */
+let baseFitDistance = fitDistance(camera.aspect);
+controls.minDistance = baseFitDistance * 0.45;
+controls.maxDistance = baseFitDistance * 1.8;
+controls.autoRotate = !reduced;
+controls.autoRotateSpeed = 2.4;
+
+let idleTimer = null;
+function pauseAutoRotate() {
+  controls.autoRotate = false;
+  clearTimeout(idleTimer);
+  if (!reduced) idleTimer = setTimeout(() => { controls.autoRotate = true; }, 3200);
+}
+renderer.domElement.addEventListener('pointerdown', pauseAutoRotate);
+renderer.domElement.addEventListener('wheel', pauseAutoRotate, { passive: true });
+
+/* ── Bucle ────────────────────────────────────────────────────────────────── */
+const clock = new THREE.Clock();
+let visible = true;
+document.addEventListener('visibilitychange', () => { visible = !document.hidden; });
+
+let firstFrame = true;
+function frame() {
+  requestAnimationFrame(frame);
+  if (!visible) return;
+  const dt = Math.min(clock.getDelta(), 1 / 30);
+  controls.update(dt);
+  renderer.render(scene, camera);
+  if (firstFrame) {
+    firstFrame = false;
+    loading.style.opacity = '0';
+    setTimeout(() => loading.remove(), 500);
+  }
+}
+frame();
+
+/* ── Resize ───────────────────────────────────────────────────────────────── */
+let resizeRaf = 0;
+window.addEventListener('resize', () => {
+  cancelAnimationFrame(resizeRaf);
+  resizeRaf = requestAnimationFrame(() => {
+    const newAspect = window.innerWidth / window.innerHeight;
+    camera.aspect = newAspect;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+
+    /* Re-encajar conservando el zoom relativo del usuario: si había alejado
+       la cámara a 1.3x la distancia de encuadre, sigue a 1.3x de la nueva —
+       no se le devuelve de golpe al encuadre por defecto en cada resize. */
+    const currentDist = camera.position.distanceTo(controls.target);
+    const zoomRatio = currentDist / baseFitDistance;
+    baseFitDistance = fitDistance(newAspect);
+    controls.minDistance = baseFitDistance * 0.45;
+    controls.maxDistance = baseFitDistance * 1.8;
+
+    const dir = camera.position.clone().sub(controls.target).normalize();
+    const clampedRatio = Math.min(Math.max(zoomRatio, 0.45), 1.8);
+    camera.position.copy(dir.multiplyScalar(baseFitDistance * clampedRatio).add(controls.target));
+  });
+}, { passive: true });
+</script>
+</body>
+</html>
