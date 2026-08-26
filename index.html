@@ -395,7 +395,7 @@
 </section>
 
 <!-- ══════════════════════════════ SERVICIOS ══════════════════════════════ -->
-<section id="servicios" class="relative scroll-mt-24 bg-void/85 py-24 backdrop-blur-sm lg:py-32">
+<section id="servicios" class="relative scroll-mt-24 bg-void/45 py-24 backdrop-blur-sm lg:py-32">
   <div class="mx-auto max-w-[1600px] px-5 lg:px-8">
 
     <header class="reveal max-w-2xl">
@@ -516,7 +516,7 @@
 </section>
 
 <!-- ══════════════════════════════ CASOS DE ÉXITO ══════════════════════════════ -->
-<section id="casos" class="relative scroll-mt-24 border-y border-line-soft bg-void/80 py-24 backdrop-blur-sm lg:py-32">
+<section id="casos" class="relative scroll-mt-24 border-y border-line-soft bg-void/40 py-24 backdrop-blur-sm lg:py-32">
   <div class="mx-auto max-w-[1600px] px-5 lg:px-8">
 
     <header class="reveal max-w-2xl">
@@ -695,7 +695,7 @@
 </section>
 
 <!-- ══════════════════════════════ PROYECTOS ══════════════════════════════ -->
-<section id="proyectos" class="relative scroll-mt-24 bg-void/85 py-24 backdrop-blur-sm lg:py-32">
+<section id="proyectos" class="relative scroll-mt-24 bg-void/45 py-24 backdrop-blur-sm lg:py-32">
   <div class="mx-auto max-w-[1600px] px-5 lg:px-8">
 
     <header class="reveal flex flex-col gap-6 sm:flex-row sm:items-end sm:justify-between">
@@ -790,7 +790,7 @@
 </section>
 
 <!-- ══════════════════════════════ CONTACTO ══════════════════════════════ -->
-<section id="contacto" class="relative scroll-mt-24 bg-void/85 py-24 backdrop-blur-sm lg:py-32">
+<section id="contacto" class="relative scroll-mt-24 bg-void/45 py-24 backdrop-blur-sm lg:py-32">
   <div class="mx-auto max-w-[1600px] px-5 lg:px-8">
     <div class="ring-gradient overflow-hidden rounded-brand border border-line bg-surface/40 backdrop-blur-xl">
       <div class="grid lg:grid-cols-2">
@@ -1248,7 +1248,7 @@ function buildHudRing(radius, color, dashSize, gapSize) {
   return line;
 }
 
-function DataDust({ count, parentHalfExtents }) {
+function DataDust({ count, parentHalfExtents, zoneState }) {
   const geo = useMemo(() => {
     const g = new THREE.BufferGeometry();
     const pos = new Float32Array(count * 3);
@@ -1269,7 +1269,12 @@ function DataDust({ count, parentHalfExtents }) {
 
   const ref = useRef();
   useFrame((state, dt) => {
-    if (!reduced && ref.current) ref.current.rotation.y -= Math.min(dt, 1 / 30) * 0.3;
+    /* Lee zoneState.current.speedMul cada frame en vez de recibirlo como
+       prop: es un componente separado con su propio useFrame, así que leer
+       el ref compartido (en vez de una prop que cambiaría en cada render)
+       es lo que evita que Servicios/Casos "acelere" el polvo de datos
+       forzando un re-render de React 60 veces por segundo. */
+    if (!reduced && ref.current) ref.current.rotation.y -= Math.min(dt, 1 / 30) * 0.3 * (zoneState.current.speedMul || 1);
   });
 
   return (
@@ -1280,6 +1285,33 @@ function DataDust({ count, parentHalfExtents }) {
   );
 }
 
+/*
+  ── Zonas: pose objetivo del isotipo por sección ────────────────────────────
+
+  La petición daba coordenadas de mundo fijas (x:+2.5, x:-2.0, y:1.2...) —
+  pensadas para un proyecto R3F con su propio framing de cámara. Aquí xFrac/
+  yFrac son FRACCIONES de visibleW/visibleH (igual que ya hacía la transición
+  Sección 1→2), para que la posición siga siendo responsive en cualquier
+  ancho de pantalla en vez de quedar fija en unidades de mundo.
+
+  tilt/pulse son interruptores ('idle' | 'dramatic' / 'idle' | 'breathing'):
+  en el bucle se leen como blend 0↔1 hacia la pose o el pulso alternativo, no
+  como un valor que se usa literal.
+
+  mobileYFrac existe porque en móvil no hay columna vacía a los lados — el
+  objeto se queda centrado en X siempre (ver `wide` en useFrame) y solo se
+  reacomoda en Y.
+*/
+const ZONES = {
+  'hero-intro':   { xFrac: 0,      yFrac: 0,     mobileYFrac: 0,     scale: 1.15, tilt: 'idle',     explode: 0,   wireBoost: 0,    extraFade: 0,   speedMul: 1,   pulse: 'idle'      },
+  'hero-content': { xFrac: 0.22,   yFrac: 0.012, mobileYFrac: 0.16,  scale: 0.72, tilt: 'idle',     explode: 0,   wireBoost: 0,    extraFade: 0,   speedMul: 1,   pulse: 'idle'      },
+  servicios:      { xFrac: -0.19,  yFrac: -0.18, mobileYFrac: -0.1,  scale: 0.5,  tilt: 'idle',     explode: 1,   wireBoost: 1,    extraFade: 0.55,speedMul: 1.4, pulse: 'idle'      },
+  casos:          { xFrac: 0,      yFrac: 0.05,  mobileYFrac: 0.05,  scale: 0.48, tilt: 'dramatic', explode: 0.3, wireBoost: 0.5,  extraFade: 0.75,speedMul: 2.6, pulse: 'idle'      },
+  proyectos:      { xFrac: 0,      yFrac: -0.05, mobileYFrac: -0.05, scale: 0.48, tilt: 'dramatic', explode: 0.3, wireBoost: 0.5,  extraFade: 0.75,speedMul: 2.6, pulse: 'idle'      },
+  contacto:       { xFrac: 0,      yFrac: 0.26,  mobileYFrac: 0.2,   scale: 0.55, tilt: 'idle',     explode: 0,   wireBoost: 0.25, extraFade: 0.2, speedMul: 1,   pulse: 'breathing' },
+};
+const ZONE_ORDER = ['hero-intro', 'hero-content', 'servicios', 'casos', 'proyectos', 'contacto'];
+
 function HologramMark() {
   const markRef = useRef();
   const glowRef = useRef();
@@ -1289,13 +1321,25 @@ function HologramMark() {
   const keyRef = useRef();
   const rimVioletRef = useRef();
   const rimGoldRef = useRef();
+  /* Un grupo por color, no uno por pieza — el "explode" empuja TODO el
+     violeta claro para un lado y TODA la cinta amarilla para el otro, como
+     dos bloques, en vez de dispersar cada pieza individualmente. */
+  const ringGroupRef = useRef();
+  const ringDarkGroupRef = useRef();
+  const ribbonGroupRef = useRef();
 
-  const input = useRef({ tx: 0, ty: 0, x: 0, y: 0, heroProgress: 0, introProgress: 0 });
+  const input = useRef({ tx: 0, ty: 0, x: 0, y: 0, introProgress: 0, footerFade: 0 });
   const spinRef = useRef(0);
   const scratchEuler = useRef(new THREE.Euler());
   const targetQuat = useRef(new THREE.Quaternion());
   const gizmoTick = useRef(0);
   const revealed = useRef(false);
+
+  /* Qué sección manda ahora mismo (IntersectionObserver, más abajo) y el
+     estado YA interpolado hacia esa zona — nunca saltan de golpe, useFrame
+     los acerca al objetivo cuadro a cuadro con THREE.MathUtils.lerp. */
+  const zoneKeyRef = useRef('hero-intro');
+  const zoneState = useRef({ xFrac: 0, yFrac: 0, scale: 1.15, tilt: 0, explode: 0, wireBoost: 0, extraFade: 0, speedMul: 1, pulse: 0 });
 
   const hostEl = document.getElementById('scene');
   const gizmoOut = {
@@ -1396,27 +1440,58 @@ function HologramMark() {
       input.current.ty = -((e.clientY / window.innerHeight) * 2 - 1);
     }
     function onScroll() {
-      /*
-        Dos progresos, uno por cada sección — antes había una sola sección
-        #hero y un solo progreso. introProgress cubre SOLO la Sección 1 (la
-        insignia): llega a 1 justo al entrar a Sección 2, que es el momento
-        en que la transición centro→reposo debe estar terminada. heroProgress
-        sigue cubriendo el tramo completo (Sección 1 + Sección 2) y es lo que
-        maneja el desvanecido del canvas al salir del hero hacia Servicios.
-      */
+      /* introProgress cubre SOLO la Sección 1 (la insignia): llega a 1 justo
+         al entrar a Sección 2, que es el momento en que la transición
+         centro→reposo debe estar terminada. Sigue siendo el motor del giro
+         grande de esa transición específica. */
       const introEl = document.getElementById('hero-intro');
-      const contentEl = document.getElementById('hero-content');
       const introH = (introEl && introEl.offsetHeight) || window.innerHeight;
-      const contentH = (contentEl && contentEl.offsetHeight) || window.innerHeight;
       input.current.introProgress = Math.min(Math.max(window.scrollY / introH, 0), 1);
-      input.current.heroProgress = Math.min(Math.max(window.scrollY / (introH + contentH), 0), 1);
+
+      /*
+        footerFade: antes el canvas se desvanecía al salir del HERO (una sola
+        sección). Ahora el isotipo debe seguir presente e interactuando a lo
+        largo de Servicios, Casos, Proyectos y Contacto — así que el
+        desvanecido se mueve al FINAL de todo ese recorrido, cuando el pie de
+        página empieza a entrar en pantalla, no antes.
+      */
+      const contactoEl = document.getElementById('contacto');
+      let footerFade = 0;
+      if (contactoEl) {
+        const contactoBottom = contactoEl.offsetTop + contactoEl.offsetHeight;
+        const past = (window.scrollY + window.innerHeight) - contactoBottom;
+        footerFade = Math.min(Math.max(past / 400, 0), 1);
+      }
+      input.current.footerFade = footerFade;
     }
     onScroll();
     if (!reduced) window.addEventListener('pointermove', onMove, { passive: true });
     window.addEventListener('scroll', onScroll, { passive: true });
+
+    /*
+      ── Zona activa: qué sección manda la pose del isotipo ahora mismo ────
+
+      Mismo rootMargin que usa el scrollspy del nav (-45% arriba, -50% abajo):
+      la sección "activa" es la que ocupa el centro vertical del viewport, no
+      la primera que asoma por el borde. Independiente del observer del nav
+      a propósito — acoplarlos habría forzado a hero-intro/hero-content
+      (que no tienen link en el nav) a vivir en esa lista para nada.
+    */
+    let zoneObserver;
+    if ('IntersectionObserver' in window) {
+      const zoneEls = ZONE_ORDER.map((id) => document.getElementById(id)).filter(Boolean);
+      zoneObserver = new IntersectionObserver((entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) zoneKeyRef.current = entry.target.id;
+        });
+      }, { rootMargin: '-45% 0px -50% 0px' });
+      zoneEls.forEach((el) => zoneObserver.observe(el));
+    }
+
     return () => {
       window.removeEventListener('pointermove', onMove);
       window.removeEventListener('scroll', onScroll);
+      if (zoneObserver) zoneObserver.disconnect();
     };
   }, []);
 
@@ -1437,51 +1512,84 @@ function HologramMark() {
     input.current.x += (input.current.tx - input.current.x) * t;
     input.current.y += (input.current.ty - input.current.y) * t;
 
-    const tiltX = reduced ? 0 : -input.current.y * 0.3;
-    const tiltY = reduced ? 0 : input.current.x * 0.45;
-
-    scratchEuler.current.set(tiltX + 0.18, spin + scrollSpin + tiltY, tiltY * 0.14);
-    targetQuat.current.setFromEuler(scratchEuler.current);
-    markRef.current.quaternion.slerp(targetQuat.current, damp(0.0015, dt));
-
     const camera = state.camera;
     const visibleH = 2 * camera.position.z * Math.tan((camera.fov * Math.PI / 180) / 2);
     const visibleW = visibleH * camera.aspect;
     const fit = softFit(visibleW);
+    const wide = visibleW / visibleH > 1.05;
 
     /*
-      ── Intro insignia (Sección 1) → posición fija en el hero (Sección 2) ──
+      ── Zona activa → estado interpolado ──────────────────────────────────
 
-      introT recorre 0→1 exactamente a lo largo de la Sección 1 — llega a 1
-      justo cuando el usuario termina de pasar a la Sección 2, no a un
-      porcentaje arbitrario del hero completo (así era antes de dividir el
-      hero en dos secciones). smootherstep, no lineal, para que el acomodo
-      frene en vez de detenerse en seco. En introT=0 (tope de página) el
-      objeto vive en el centro absoluto (x=0, y=0) a su escala más grande —
-      la "insignia de presentación" pedida. A medida que crece, interpola
-      hacia la posición y escala de reposo (derecha en escritorio, arriba
-      centrado en móvil) — el sitio donde la Sección 2 le dejó una columna
-      libre.
+      zoneKeyRef lo escribe el IntersectionObserver de más arriba (qué
+      sección está en el centro del viewport ahora mismo); zoneState.current
+      es hacia dónde se ACERCA cuadro a cuadro con lerp — nunca salta de una
+      pose a otra de golpe, cruzar de Servicios a Casos se siente como un
+      barrido continuo, no como un corte.
 
-      reduced-motion salta directo a introT=1: la composición de reposo es
-      la que no depende de que el usuario haga scroll para verse bien, así
-      que es la que se le muestra siempre a quien pidió sin animaciones.
+      reduced-motion usa factor 1 (salto instantáneo al objetivo): se sigue
+      reacomodando por sección — eso es estructura, no decoración — pero sin
+      el "acercamiento animado" que sí cuenta como movimiento.
     */
-    const wide = visibleW / visibleH > 1.05;
-    const introT = reduced ? 1 : smootherstep(input.current.introProgress);
-    const restX = wide ? visibleW * 0.22 : 0;
-    const restY = wide ? 0.05 : visibleH * 0.16;
+    const zone = ZONES[zoneKeyRef.current] || ZONES['hero-intro'];
+    const zt = reduced ? 1 : damp(0.0025, dt);
+    const zs = zoneState.current;
+    zs.xFrac = THREE.MathUtils.lerp(zs.xFrac, wide ? zone.xFrac : 0, zt);
+    zs.yFrac = THREE.MathUtils.lerp(zs.yFrac, wide ? zone.yFrac : zone.mobileYFrac, zt);
+    zs.scale = THREE.MathUtils.lerp(zs.scale, zone.scale, zt);
+    zs.tilt = THREE.MathUtils.lerp(zs.tilt, zone.tilt === 'dramatic' ? 1 : 0, zt);
+    zs.explode = THREE.MathUtils.lerp(zs.explode, zone.explode, zt);
+    zs.wireBoost = THREE.MathUtils.lerp(zs.wireBoost, zone.wireBoost, zt);
+    zs.extraFade = THREE.MathUtils.lerp(zs.extraFade, zone.extraFade, zt);
+    zs.speedMul = THREE.MathUtils.lerp(zs.speedMul, zone.speedMul, zt);
+    zs.pulse = THREE.MathUtils.lerp(zs.pulse, zone.pulse === 'breathing' ? 1 : 0, zt);
 
-    /* 1.15 → 0.72: arranca más grande que el reposo anterior (que iba de 1 a
-       0.68) para leerse como insignia protagonista, y termina dentro del
-       rango 0.7–0.85 pedido para la posición ya fijada en el hero. */
-    const recede = THREE.MathUtils.lerp(1.15, 0.72, introT);
-    markRef.current.scale.setScalar(recede * fit * MARK_SCALE);
+    const tiltX = reduced ? 0 : -input.current.y * 0.3;
+    const tiltY = reduced ? 0 : input.current.x * 0.45;
+
+    /* spin envuelto a [0, 2π) solo para esta mezcla: sin envolver, tras
+       varios minutos de scroll spin puede valer decenas de radianes, y
+       mezclarlo con la pose dramática (un ángulo absoluto pequeño) haría
+       que el objeto "barriera" varias vueltas completas antes de asentarse
+       la primera vez que entra a Casos/Proyectos. */
+    const idleY = (((spin + scrollSpin + tiltY) % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2);
+    scratchEuler.current.set(
+      THREE.MathUtils.lerp(tiltX + 0.18, Math.PI / 4, zs.tilt),
+      THREE.MathUtils.lerp(idleY, Math.PI / 3, zs.tilt),
+      THREE.MathUtils.lerp(tiltY * 0.14, 0, zs.tilt)
+    );
+    targetQuat.current.setFromEuler(scratchEuler.current);
+    markRef.current.quaternion.slerp(targetQuat.current, damp(0.0015, dt));
+
+    markRef.current.scale.setScalar(zs.scale * fit * MARK_SCALE);
 
     const float = reduced ? 0 : Math.sin(spin * 0.6) * 0.07;
-    const posX = THREE.MathUtils.lerp(0, restX, introT);
-    const posY = THREE.MathUtils.lerp(0, restY, introT) + float;
+    const posX = zs.xFrac * visibleW;
+    const posY = zs.yFrac * visibleH + float;
     markRef.current.position.set(posX, posY, -DEPTH * 0.6);
+
+    /*
+      ── Desglose técnico (Servicios) ───────────────────────────────────────
+      Separa los tres grupos de color en Z: la cinta amarilla se adelanta,
+      el violeta oscuro se atrasa — "simular análisis/procesamiento de
+      datos" pedido para esa sección, sin tocar la silueta de cada pieza.
+    */
+    const explodeAmt = zs.explode * 0.4;
+    if (ringGroupRef.current) ringGroupRef.current.position.z = -explodeAmt * 0.5;
+    if (ringDarkGroupRef.current) ringDarkGroupRef.current.position.z = -explodeAmt;
+    if (ribbonGroupRef.current) ribbonGroupRef.current.position.z = DEPTH * 0.4 + explodeAmt * 1.3;
+
+    /* Wireframe/bordes más intensos en Servicios ("la intensidad del
+       wireframe/emisivo neón aumenta"), base más transparente en Casos/
+       Proyectos ("ligera transparencia extra"). */
+    wireVioletMat.opacity = THREE.MathUtils.lerp(0.3, 0.75, zs.wireBoost);
+    wireGoldMat.opacity = THREE.MathUtils.lerp(0.3, 0.75, zs.wireBoost);
+    edgeVioletMat.opacity = THREE.MathUtils.lerp(0.9, 1, zs.wireBoost);
+    edgeGoldMat.opacity = THREE.MathUtils.lerp(0.9, 1, zs.wireBoost);
+    const baseOpacity = THREE.MathUtils.lerp(0.5, 0.28, zs.extraFade);
+    matVioletLight.opacity = baseOpacity;
+    matVioletDark.opacity = baseOpacity;
+    matYellow.opacity = baseOpacity * 1.04; // el amarillo lee más tenue a igual alfa; una pizca más lo empareja
 
     if (glowRef.current) {
       glowRef.current.position.set(posX, posY, -1.4);
@@ -1490,11 +1598,11 @@ function HologramMark() {
 
     if (ringVioletRef.current) {
       ringVioletRef.current.position.set(posX, posY, -DEPTH * 0.6);
-      ringVioletRef.current.scale.setScalar(recede * fit);
+      ringVioletRef.current.scale.setScalar(zs.scale * fit);
     }
     if (ringGoldRef.current) {
       ringGoldRef.current.position.set(posX, posY, -DEPTH * 0.6);
-      ringGoldRef.current.scale.setScalar(recede * fit);
+      ringGoldRef.current.scale.setScalar(zs.scale * fit);
     }
 
     if (keyRef.current) keyRef.current.position.set(2.4 + posX * 0.3, 3, 4);
@@ -1502,26 +1610,40 @@ function HologramMark() {
     if (!reduced) {
       if (rimVioletRef.current) rimVioletRef.current.position.set(-2.6 + posX + input.current.x * 1.4, 0.8 + posY + input.current.y * 0.6, -1.6);
       if (rimGoldRef.current) rimGoldRef.current.position.set(2.8 + posX - input.current.x * 1.4, -0.7 + posY - input.current.y * 0.6, -1.4);
-      if (ambientPointsRef.current) ambientPointsRef.current.rotation.y += dt * 0.015;
+      if (ambientPointsRef.current) ambientPointsRef.current.rotation.y += dt * 0.015 * zs.speedMul;
 
+      /* Cada aro gira a su propio ritmo — el multiplicador de zona acelera
+         ambos por igual ("las líneas de viento aceleran su velocidad de
+         flujo orbital imitando velocidad de ejecución" en Casos/Proyectos). */
       if (ringVioletRef.current) {
-        ringVioletRef.current.rotation.y += dt * 0.18;
+        ringVioletRef.current.rotation.y += dt * 0.18 * zs.speedMul;
         ringVioletRef.current.rotation.x = 0.35 + Math.sin(spin * 0.7) * 0.08;
       }
       if (ringGoldRef.current) {
-        ringGoldRef.current.rotation.y -= dt * 0.24;
+        ringGoldRef.current.rotation.y -= dt * 0.24 * zs.speedMul;
         ringGoldRef.current.rotation.z = -0.22 + Math.cos(spin * 0.55) * 0.09;
       }
     }
 
-    /* Pulso: la emisión de los tres materiales respira con un seno sobre el
-       reloj de la escena — "el holograma procesando datos" pedido. */
-    const pulse = reduced ? 0 : Math.sin(clockT * 1.6);
-    matVioletLight.emissiveIntensity = 0.55 + pulse * 0.25;
-    matVioletDark.emissiveIntensity = 0.5 + pulse * 0.22;
-    matYellow.emissiveIntensity = 0.6 + pulse * 0.28;
+    /*
+      Pulso: respiración normal, salvo en Contacto, donde se mezcla hacia un
+      "Breathing Glow" más lento y profundo ("en sintonía con un botón de
+      CTA activo" — incompatible acoplar JS a una animación CSS del botón
+      sin estado compartido, así que se empareja el RITMO, no un vínculo
+      literal: ambos rondan un período de ~3-4s, ver el botón "Iniciar
+      Proyecto"/CTA de la sección).
+    */
+    const idlePulse = reduced ? 0 : Math.sin(clockT * 1.6);
+    const breathPulse = reduced ? 0 : Math.sin(clockT * 0.55) * 1.3;
+    const pulse = THREE.MathUtils.lerp(idlePulse, breathPulse, zs.pulse);
+    const wireEmissiveBoost = zs.wireBoost * 0.3;
+    matVioletLight.emissiveIntensity = 0.55 + pulse * 0.25 + wireEmissiveBoost;
+    matVioletDark.emissiveIntensity = 0.5 + pulse * 0.22 + wireEmissiveBoost;
+    matYellow.emissiveIntensity = 0.6 + pulse * 0.28 + wireEmissiveBoost;
 
-    const presence = 1 - smootherstep(input.current.heroProgress) * 0.86;
+    /* El isotipo ahora acompaña las 5 secciones — el desvanecido se movió al
+       pie de página (footerFade), no a la salida del hero. */
+    const presence = 1 - smootherstep(input.current.footerFade);
     if (hostEl) hostEl.style.opacity = revealed.current ? presence.toFixed(3) : '0';
     if (!revealed.current) { revealed.current = true; document.body.dataset.webgl = 'on'; }
 
@@ -1551,28 +1673,34 @@ function HologramMark() {
       <primitive object={ringGoldLine} ref={ringGoldRef} />
 
       <group ref={markRef}>
-        {violetLightGeo.map((geo, i) => (
-          <group key={`vl-${i}`}>
-            <mesh geometry={geo} material={matVioletLight} />
-            <mesh geometry={geo} material={wireVioletMat} />
-            <lineSegments geometry={violetLightEdges[i]} material={edgeVioletMat} />
-          </group>
-        ))}
-        {violetDarkGeo.map((geo, i) => (
-          <group key={`vd-${i}`}>
-            <mesh geometry={geo} material={matVioletDark} />
-            <mesh geometry={geo} material={wireVioletMat} />
-            <lineSegments geometry={violetDarkEdges[i]} material={edgeVioletMat} />
-          </group>
-        ))}
-        {yellowGeo.map((geo, i) => (
-          <group key={`y-${i}`} position-z={DEPTH * 0.4}>
-            <mesh geometry={geo} material={matYellow} />
-            <mesh geometry={geo} material={wireGoldMat} />
-            <lineSegments geometry={yellowEdges[i]} material={edgeGoldMat} />
-          </group>
-        ))}
-        <DataDust count={isMobile ? 40 : 90} parentHalfExtents={[0.46, 0.52, 0.3]} />
+        <group ref={ringGroupRef}>
+          {violetLightGeo.map((geo, i) => (
+            <group key={`vl-${i}`}>
+              <mesh geometry={geo} material={matVioletLight} />
+              <mesh geometry={geo} material={wireVioletMat} />
+              <lineSegments geometry={violetLightEdges[i]} material={edgeVioletMat} />
+            </group>
+          ))}
+        </group>
+        <group ref={ringDarkGroupRef}>
+          {violetDarkGeo.map((geo, i) => (
+            <group key={`vd-${i}`}>
+              <mesh geometry={geo} material={matVioletDark} />
+              <mesh geometry={geo} material={wireVioletMat} />
+              <lineSegments geometry={violetDarkEdges[i]} material={edgeVioletMat} />
+            </group>
+          ))}
+        </group>
+        <group ref={ribbonGroupRef} position-z={DEPTH * 0.4}>
+          {yellowGeo.map((geo, i) => (
+            <group key={`y-${i}`}>
+              <mesh geometry={geo} material={matYellow} />
+              <mesh geometry={geo} material={wireGoldMat} />
+              <lineSegments geometry={yellowEdges[i]} material={edgeGoldMat} />
+            </group>
+          ))}
+        </group>
+        <DataDust count={isMobile ? 40 : 90} parentHalfExtents={[0.46, 0.52, 0.3]} zoneState={zoneState} />
       </group>
     </>
   );
